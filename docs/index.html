@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentOrbit — Lightweight macOS HUD for AI Coding Agents</title>
+  <meta name="description" content="A fast, zero-dependency macOS menu bar & floating desktop HUD for Codex, Antigravity, and custom AI coding agents." />
+  <style>
+    :root {
+      --bg: #0b101b;
+      --bg-elev: #121928;
+      --card: rgba(20, 28, 45, 0.78);
+      --border: rgba(255, 255, 255, 0.11);
+      --text: #eef2ff;
+      --muted: #9aa7c2;
+      --cyan: #22d3ee;
+      --green: #22c55e;
+      --orange: #f97316;
+      --indigo: #6366f1;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background:
+        radial-gradient(900px 520px at 15% -10%, rgba(34, 211, 238, 0.14), transparent 60%),
+        radial-gradient(800px 520px at 90% 5%, rgba(99, 102, 241, 0.15), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 650;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lang-toggle {
+      display: inline-flex;
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px;
+    }
+
+    .lang-toggle button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+
+    .lang-toggle button.active {
+      background: rgba(34, 211, 238, 0.18);
+      color: var(--cyan);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.94rem;
+      border: 1px solid var(--border);
+      transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #22d3ee, #3b82f6);
+      color: #06101c;
+      border-color: transparent;
+      box-shadow: 0 8px 26px rgba(34, 211, 238, 0.24);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elev);
+      color: var(--text);
+    }
+
+    .btn-secondary:hover { border-color: rgba(255, 255, 255, 0.28); }
+
+    .btn-sm { padding: 7px 13px; font-size: 0.85rem; }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 36px;
+      align-items: center;
+      padding: 64px 0 48px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: rgba(34, 211, 238, 0.1);
+      border: 1px solid rgba(34, 211, 238, 0.25);
+      color: var(--cyan);
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: clamp(2.1rem, 4.2vw, 3.1rem);
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin: 0 0 26px;
+      color: var(--muted);
+      font-size: 1.06rem;
+      max-width: 54ch;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* HUD Preview Card */
+    .hud-shell {
+      background: linear-gradient(180deg, rgba(24, 33, 52, 0.95), rgba(15, 21, 34, 0.95));
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.52);
+    }
+
+    .hud-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.84rem;
+    }
+
+    .hud-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 650;
+    }
+
+    .hud-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: rgba(34, 197, 94, 0.16);
+      color: #86efac;
+    }
+
+    .hud-grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .hud-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .hud-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .hud-proj {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .status-live { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .status-idle { background: rgba(148, 163, 184, 0.14); color: #94a3b8; }
+
+    .hud-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .tag {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: #cbd5e1;
+    }
+
+    .rings {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .ring-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.78rem;
+    }
+
+    .ring-label { font-weight: 650; display: block; }
+    .ring-sub { color: var(--muted); font-size: 0.72rem; }
+
+    /* Sections */
+    section { padding: 36px 0; }
+
+    .section-title {
+      font-size: 1.5rem;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-sub {
+      color: var(--muted);
+      margin: 0 0 24px;
+    }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+
+    .feature-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.02rem;
+    }
+
+    .feature-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px;
+    }
+
+    .panel h3 { margin: 0 0 10px; font-size: 1.06rem; }
+    .panel p, .panel li { color: var(--muted); font-size: 0.92rem; }
+    .panel ol, .panel ul { padding-left: 18px; margin: 8px 0 12px; }
+
+    pre {
+      margin: 12px 0 0;
+      padding: 13px 15px;
+      background: #070b13;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.83rem;
+      color: #dbeafe;
+    }
+
+    code { font-family: var(--mono); font-size: 0.86em; color: #bae6fd; }
+
+    footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+      padding: 28px 0 42px;
+      margin-top: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    footer a:hover { color: var(--text); text-decoration: underline; }
+
+    [data-lang="de"] .en,
+    [data-lang="en"] .de {
+      display: none !important;
+    }
+
+    @media (max-width: 880px) {
+      .hero, .two-col { grid-template-columns: 1fr; }
+      .features { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .features { grid-template-columns: 1fr; }
+      header { flex-wrap: wrap; gap: 12px; }
+    }
+  </style>
+</head>
+<body data-lang="en">
+  <div class="container">
+    <header>
+      <a class="brand" href="#">
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+          <defs>
+            <linearGradient id="orbitBg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#1c2438" />
+              <stop offset="100%" stop-color="#2e4061" />
+            </linearGradient>
+          </defs>
+          <rect width="28" height="28" rx="8" fill="url(#orbitBg)" stroke="rgba(255,255,255,0.16)" />
+          <path d="M 5.6 10.1 A 9.2 9.2 0 0 1 22.9 16.4" fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="1.8" stroke-linecap="round" />
+          <path d="M 21.5 19.3 A 9.2 9.2 0 0 1 4.9 14.8" fill="none" stroke="#22d3ee" stroke-width="1.8" stroke-linecap="round" />
+          <circle cx="14" cy="14" r="2.8" fill="#22c55e" />
+          <circle cx="19.1" cy="6.2" r="1.7" fill="#22d3ee" />
+          <circle cx="6.2" cy="19.1" r="1.7" fill="#f97316" />
+        </svg>
+        <span>AgentOrbit</span>
+      </a>
+
+      <div class="nav-actions">
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button type="button" id="btn-en" class="active" onclick="setLang('en')">EN</button>
+          <button type="button" id="btn-de" onclick="setLang('de')">DE</button>
+        </div>
+        <a class="btn btn-secondary btn-sm" href="https://github.com/SimHub/AgentOrbit" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <div class="pill">
+            <span class="dot"></span>
+            <span class="en">macOS 14+ · Native SwiftUI · 0 Dependencies</span>
+            <span class="de">macOS 14+ · Natives SwiftUI · 0 Abhängigkeiten</span>
+          </div>
+
+          <h1 class="en">Your AI coding agents, in one crisp desktop orbit.</h1>
+          <h1 class="de">Deine KI-Coding-Agents kompakt im Blick.</h1>
+
+          <p class="subtitle en">
+            A fast, ~2 MB macOS menu bar app and floating snap-grid HUD that tracks live sessions, Git branches, models, runtime, and rate limits locally across Codex, Antigravity, and custom agents.
+          </p>
+          <p class="subtitle de">
+            Schlanke (~2 MB) macOS-Menüleisten-App &amp; schwebendes Desktop-HUD mit Einrast-Raster: Live-Status, Git-Branches, Modelle, Laufzeit und Limit-Ringe lokal für Codex, Antigravity &amp; eigene Agents.
+          </p>
+
+          <div class="cta-row">
+            <a class="btn btn-primary" href="https://github.com/SimHub/AgentOrbit/releases/latest/download/AgentOrbit.dmg">
+              <span class="en">Download Universal DMG</span>
+              <span class="de">Universal-DMG laden</span>
+            </a>
+            <a class="btn btn-secondary" href="https://github.com/SimHub/AgentOrbit" target="_blank" rel="noopener">
+              <span class="en">Source on GitHub</span>
+              <span class="de">Quellcode auf GitHub</span>
+            </a>
+          </div>
+
+          <div class="meta-row">
+            <span>Apple Silicon &amp; Intel</span>
+            <span>·</span>
+            <span class="en">MIT Open Source</span>
+            <span class="de">MIT Open Source</span>
+            <span>·</span>
+            <span class="en">Strictly read-only</span>
+            <span class="de">Strikt Read-Only</span>
+          </div>
+        </div>
+
+        <div class="hud-shell" aria-label="AgentOrbit HUD Preview">
+          <div class="hud-header">
+            <div class="hud-title">
+              <span>AgentOrbit</span>
+              <span class="hud-badge en">2 live</span>
+              <span class="hud-badge de">2 aktiv</span>
+            </div>
+            <span style="color: var(--muted); font-family: var(--mono); font-size: 0.76rem;">⌃⌥ O</span>
+          </div>
+
+          <div class="hud-grid">
+            <div class="hud-card">
+              <div class="hud-card-top">
+                <div class="hud-proj">
+                  <span class="dot"></span>
+                  <span>AgentOrbit</span>
+                </div>
+                <span class="status-pill status-live">1m 42s</span>
+              </div>
+              <div class="hud-meta">
+                <span class="tag">Codex</span>
+                <span class="tag">main</span>
+                <span class="tag">gpt-5.3 · high</span>
+                <span class="tag">~$0.14</span>
+              </div>
+            </div>
+
+            <div class="hud-card">
+              <div class="hud-card-top">
+                <div class="hud-proj">
+                  <span class="dot"></span>
+                  <span>web-dashboard</span>
+                </div>
+                <span class="status-pill status-live">48s</span>
+              </div>
+              <div class="hud-meta">
+                <span class="tag">Antigravity</span>
+                <span class="tag">feat/hud</span>
+                <span class="tag">Gemini · Med</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rings">
+            <div class="ring-box">
+              <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="12" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3.2" />
+                <circle cx="16" cy="16" r="12" fill="none" stroke="#22d3ee" stroke-width="3.2" stroke-dasharray="75.4" stroke-dashoffset="28" stroke-linecap="round" transform="rotate(-90 16 16)" />
+              </svg>
+              <div>
+                <span class="ring-label">5h Limit · 63%</span>
+                <span class="ring-sub">Reset in 2h 14m</span>
+              </div>
+            </div>
+
+            <div class="ring-box">
+              <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="12" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3.2" />
+                <circle cx="16" cy="16" r="12" fill="none" stroke="#22c55e" stroke-width="3.2" stroke-dasharray="75.4" stroke-dashoffset="49" stroke-linecap="round" transform="rotate(-90 16 16)" />
+              </svg>
+              <div>
+                <span class="ring-label">Weekly · 35%</span>
+                <span class="ring-sub">Reset in 4d 6h</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 class="section-title en">Designed to stay out of your way</h2>
+        <h2 class="section-title de">Gemacht für paralleles Arbeiten</h2>
+        <p class="section-sub en">Built purely with Apple system frameworks — instant startup, 0% idle CPU, and full multi-workspace awareness.</p>
+        <p class="section-sub de">Rein auf Apple-Systemframeworks gebaut — sofort startklar, 0 % Idle-CPU und voller Multi-Projekt-Überblick.</p>
+
+        <div class="features">
+          <div class="feature-card">
+            <h3 class="en">Multi-Project Live View</h3>
+            <h3 class="de">Multi-Projekt-Übersicht</h3>
+            <p class="en">See all active and recent (24h) sessions side by side with live status, active runtime timers, Git branch, model, and menu bar counter.</p>
+            <p class="de">Alle laufenden und aktuellen Sessions (24h) nebeneinander mit Status, Laufzeit-Timer, Git-Branch, Modell und Menüleisten-Counter.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3 class="en">Snap-Grid Desktop HUD</h3>
+            <h3 class="de">Desktop-HUD mit Einrast-Grid</h3>
+            <p class="en">Pin anywhere via <code>⌃⌥ O</code>. Snap to a 24 pt grid and 9 screen anchors (hold <code>⌥</code> for free drag) and resize from 240 pt up to 3 columns.</p>
+            <p class="de">Per <code>⌃⌥ O</code> anpinnbar, mit 24-pt-Raster &amp; 9 Ankern (<code>⌥</code> = frei) sowie stufenloser Breite von 240 pt bis 3 Spalten.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3 class="en">3 Densities &amp; Limit Rings</h3>
+            <h3 class="de">3 Ansichten &amp; Limit-Ringe</h3>
+            <p class="en">Switch between <em>Minimal</em>, <em>Kompakt</em>, and <em>Detail</em> with circular 5h / Weekly usage rings and optional session cost estimates.</p>
+            <p class="de">Wähle zwischen <em>Minimal</em>, <em>Kompakt</em> und <em>Detail</em> inkl. runder 5h-/Weekly-Ringe und optionaler Kosten-Schätzung.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3 class="en">1-Click IDE Launcher</h3>
+            <h3 class="de">1-Klick-IDE-Starter</h3>
+            <p class="en">Jump straight from any card into Antigravity, VS Code, Cursor, Ghostty / Warp / iTerm / Terminal, or Finder.</p>
+            <p class="de">Direkt von jeder Karte ins passende Projekt in Antigravity, VS Code, Cursor, Terminal oder Finder springen.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3 class="en">Completion Alerts</h3>
+            <h3 class="de">Fertig-Benachrichtigung</h3>
+            <p class="en">Receive a native macOS notification (with optional sound) as soon as a running session transitions from Active to Idle.</p>
+            <p class="de">Native macOS-Mitteilung (mit optionalem Sound), sobald ein Agent von Aktiv auf Idle wechselt.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3 class="en">Zero-Config &amp; Symlink-Safe</h3>
+            <h3 class="de">Zero-Config &amp; Symlink-sicher</h3>
+            <p class="en">Auto-discovers Codex, Antigravity, and optional custom agents (OpenCode, Pi, Claude). Reads SQLite strictly read-only and handles external SSD symlinks.</p>
+            <p class="de">Erkennt Codex, Antigravity &amp; Custom-Agents automatisch, liest SQLite strikt read-only und löst Symlinks auf externen SSDs sauber auf.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="two-col">
+        <div class="panel">
+          <h3 class="en">Quick Install (DMG)</h3>
+          <h3 class="de">Schnell-Installation (DMG)</h3>
+          <ol class="en">
+            <li>Download <code>AgentOrbit.dmg</code> from GitHub Releases and drag <code>AgentOrbit.app</code> into <code>/Applications</code>.</li>
+            <li>Because releases are ad-hoc signed (not Apple-notarized), right-click → <strong>Open</strong> on first launch or clear the quarantine flag:</li>
+          </ol>
+          <ol class="de">
+            <li><code>AgentOrbit.dmg</code> aus den GitHub Releases laden und <code>AgentOrbit.app</code> in <code>/Applications</code> ziehen.</li>
+            <li>Da Releases aktuell ad-hoc signiert sind, beim Erststart Rechtsklick → <strong>Öffnen</strong> wählen oder das Quarantäne-Flag entfernen:</li>
+          </ol>
+          <pre>xattr -cr /Applications/AgentOrbit.app</pre>
+        </div>
+
+        <div class="panel">
+          <h3 class="en">Build from Source (no Xcode required)</h3>
+          <h3 class="de">Selbst bauen (ohne Xcode)</h3>
+          <p class="en">Requires macOS 14+ and Apple Command Line Tools (<code>xcode-select --install</code>):</p>
+          <p class="de">Benötigt macOS 14+ und die Apple Command Line Tools (<code>xcode-select --install</code>):</p>
+          <pre>./scripts/run_tests.sh
+./scripts/build_app.sh --universal --dmg
+open ./dist/AgentOrbit.app</pre>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>AgentOrbit · MIT License · Copyright (c) 2026 SimHub</span>
+      <span>
+        <a href="https://github.com/SimHub/AgentOrbit" target="_blank" rel="noopener">Repository</a> ·
+        <a href="https://github.com/SimHub/AgentOrbit/releases" target="_blank" rel="noopener">Releases</a> ·
+        <a href="https://github.com/SimHub/AgentOrbit/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+      </span>
+    </footer>
+  </div>
+
+  <script>
+    function setLang(lang) {
+      document.body.setAttribute('data-lang', lang);
+      document.documentElement.setAttribute('lang', lang);
+      document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+      document.getElementById('btn-de').classList.toggle('active', lang === 'de');
+    }
+    if ((navigator.language || '').toLowerCase().startsWith('de')) {
+      setLang('de');
+    }
+  </script>
+</body>
+</html>
