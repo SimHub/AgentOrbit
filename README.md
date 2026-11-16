@@ -1,9 +1,16 @@
-# AgentOrbit
+<p align="center">
+  <img src="docs/assets/icon.png" width="92" height="92" alt="AgentOrbit icon" />
+</p>
 
-[![CI](https://github.com/SimHub/AgentOrbit/actions/workflows/ci.yml/badge.svg)](https://github.com/SimHub/AgentOrbit/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-cyan.svg)](LICENSE)
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue.svg)
-![Zero Dependencies](https://img.shields.io/badge/Dependencies-0-brightgreen.svg)
+<h1 align="center">AgentOrbit</h1>
+
+<p align="center">
+  <a href="https://github.com/SimHub/AgentOrbit/actions/workflows/ci.yml"><img src="https://github.com/SimHub/AgentOrbit/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-cyan.svg" alt="License: MIT" /></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue.svg" alt="macOS 14+" />
+  <img src="https://img.shields.io/badge/Dependencies-0-brightgreen.svg" alt="Zero Dependencies" />
+  <a href="https://buymeacoffee.com/simhub"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-simhub-FFDD00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
+</p>
 
 A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required) macOS menu bar & floating desktop HUD for AI coding agents — reading live status, projects, Git branches, models, runtime, and usage metrics locally from **Codex**, **Antigravity**, and optional custom agents (**OpenCode**, **Pi**, **Claude**, etc.).
 
@@ -36,6 +43,34 @@ A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required
 ---
 
 ## Install (macOS 14+)
+
+### Option 1 — Ask Your AI Agent (or Run 1 Command)
+
+Tell your coding agent (Codex, Antigravity, Claude Code, OpenCode, etc.):
+
+> *"Install AgentOrbit from `https://github.com/SimHub/AgentOrbit` using `scripts/install.sh` (or `--from-source` if I want a local build)."*
+
+Or run the non-interactive installer directly:
+
+```zsh
+# Download latest release DMG, install to /Applications, clear quarantine & launch
+curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --open
+
+# Or let an agent clone, run unit tests, compile locally from source & install
+curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --from-source --open
+```
+
+<details>
+<summary>Installer options (<code>scripts/install.sh</code>)</summary>
+
+- `--from-source`: Clones (or uses the current repo), runs `./scripts/run_tests.sh`, compiles locally via `./scripts/build_app.sh`, and installs `AgentOrbit.app` without needing Xcode.
+- `--universal`: Together with `--from-source`, builds a universal (`arm64` + `x86_64`) binary.
+- `--dir <path>`: Custom target folder (defaults to `/Applications`, or `~/Applications` if `/Applications` is not writable).
+- `--open`: Launches `AgentOrbit.app` immediately after installation.
+
+</details>
+
+### Option 2 — Manual DMG Download
 
 1. Download **`AgentOrbit.dmg`** from [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases/latest) and drag `AgentOrbit.app` into `/Applications`.
 2. **First-launch Gatekeeper note:** Release builds are currently ad-hoc signed (not Apple notarized). If macOS warns that the app cannot be verified, either **Right-click → Open** in Finder or run:
@@ -70,6 +105,14 @@ AGENTORBIT_BUNDLE_ID=dev.agentorbit.AgentOrbit AGENTORBIT_VERSION=1.0.0 ./script
 
 > [!NOTE]
 > Uses only Apple system frameworks (`SwiftUI`, `AppKit`, `CoreServices`, `SQLite3`, `UserNotifications`, `Carbon`, `ServiceManagement`) — no Xcode project or external packages required.
+
+---
+
+## Support
+
+If AgentOrbit saves you time while juggling multiple coding agents, consider supporting the project:
+
+<a href="https://buymeacoffee.com/simhub"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20AgentOrbit-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 
 ---
 

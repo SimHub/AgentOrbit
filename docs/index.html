@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AgentOrbit — Lightweight macOS HUD for AI Coding Agents</title>
   <meta name="description" content="A fast, zero-dependency macOS menu bar & floating desktop HUD for Codex, Antigravity, and custom AI coding agents." />
+  <link rel="icon" type="image/png" href="assets/icon.png" />
   <style>
     :root {
       --bg: #0b101b;
@@ -420,6 +421,7 @@
           <button type="button" id="btn-en" class="active" onclick="setLang('en')">EN</button>
           <button type="button" id="btn-de" onclick="setLang('de')">DE</button>
         </div>
+        <a class="btn btn-secondary btn-sm" style="border-color: rgba(255, 221, 0, 0.35); color: #fde047;" href="https://buymeacoffee.com/simhub" target="_blank" rel="noopener">☕ Buy Me a Coffee</a>
         <a class="btn btn-secondary btn-sm" href="https://github.com/SimHub/AgentOrbit" target="_blank" rel="noopener">GitHub</a>
       </div>
     </header>
@@ -587,25 +589,37 @@
 
       <section class="two-col">
         <div class="panel">
-          <h3 class="en">Quick Install (DMG)</h3>
-          <h3 class="de">Schnell-Installation (DMG)</h3>
+          <h3 class="en">Install via AI Agent or 1-Liner</h3>
+          <h3 class="de">Installation per AI-Agent oder 1-Zeiler</h3>
+          <p class="en">Tell your coding agent to install AgentOrbit, or run the installer directly (downloads DMG, clears quarantine, or builds locally with <code>--from-source</code>):</p>
+          <p class="de">Sag deinem Coding-Agent, er soll AgentOrbit installieren, oder starte das Setup direkt (lädt DMG, entfernt Quarantäne oder baut lokal mit <code>--from-source</code>):</p>
+          <pre>curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --open</pre>
+          <pre>curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --from-source --open</pre>
+        </div>
+
+        <div class="panel">
+          <h3 class="en">Quick Install (Manual DMG)</h3>
+          <h3 class="de">Manuelle Installation (DMG)</h3>
           <ol class="en">
             <li>Download <code>AgentOrbit.dmg</code> from GitHub Releases and drag <code>AgentOrbit.app</code> into <code>/Applications</code>.</li>
-            <li>Because releases are ad-hoc signed (not Apple-notarized), right-click → <strong>Open</strong> on first launch or clear the quarantine flag:</li>
+            <li>Because releases are ad-hoc signed (not Apple-notarized), right-click → <strong>Open</strong> on first launch or clear quarantine:</li>
           </ol>
           <ol class="de">
             <li><code>AgentOrbit.dmg</code> aus den GitHub Releases laden und <code>AgentOrbit.app</code> in <code>/Applications</code> ziehen.</li>
-            <li>Da Releases aktuell ad-hoc signiert sind, beim Erststart Rechtsklick → <strong>Öffnen</strong> wählen oder das Quarantäne-Flag entfernen:</li>
+            <li>Da Releases aktuell ad-hoc signiert sind, beim Erststart Rechtsklick → <strong>Öffnen</strong> wählen oder Quarantäne entfernen:</li>
           </ol>
           <pre>xattr -cr /Applications/AgentOrbit.app</pre>
         </div>
+      </section>
 
+      <section>
         <div class="panel">
           <h3 class="en">Build from Source (no Xcode required)</h3>
           <h3 class="de">Selbst bauen (ohne Xcode)</h3>
           <p class="en">Requires macOS 14+ and Apple Command Line Tools (<code>xcode-select --install</code>):</p>
           <p class="de">Benötigt macOS 14+ und die Apple Command Line Tools (<code>xcode-select --install</code>):</p>
-          <pre>./scripts/run_tests.sh
+          <pre>git clone https://github.com/SimHub/AgentOrbit.git &amp;&amp; cd AgentOrbit
+./scripts/run_tests.sh
 ./scripts/build_app.sh --universal --dmg
 open ./dist/AgentOrbit.app</pre>
         </div>
@@ -617,6 +631,7 @@ open ./dist/AgentOrbit.app</pre>
       <span>
         <a href="https://github.com/SimHub/AgentOrbit" target="_blank" rel="noopener">Repository</a> ·
         <a href="https://github.com/SimHub/AgentOrbit/releases" target="_blank" rel="noopener">Releases</a> ·
+        <a href="https://buymeacoffee.com/simhub" target="_blank" rel="noopener">Buy Me a Coffee</a> ·
         <a href="https://github.com/SimHub/AgentOrbit/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
       </span>
     </footer>

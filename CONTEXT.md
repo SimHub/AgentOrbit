@@ -22,7 +22,7 @@ Schlanke macOS-Menüleisten- & Desktop-HUD-App (Swift 6 / SwiftUI, ohne Xcode, ~
 - **Kein `@State` in SwiftUI-Views:** `swiftc` baut ohne Xcode/`SwiftUIMacros`-Plugin – View-State immer in `ObservableObject` (`PopoverUIState`) halten.
 - **Bundle-Guards für Tests:** `UNUserNotificationCenter.current()` und `SMAppService.mainApp` crashen im CLI-Test-Runner ohne `.app`-Bundle → immer über `Bundle.main.bundleURL.pathExtension == "app"` absichern.
 - **SSD- & Symlink-Design:** Artefakte liegen in `.build/` und `dist/`. `PathResolver` löst Symlinks rekursiv auf; SQLite-DBs werden ausschließlich read-only gelesen.
-- **Open-Source- & Release-Setup (`SimHub/AgentOrbit`):** MIT-`LICENSE`, neutrale Default-Bundle-ID `dev.agentorbit.AgentOrbit` (überschreibbar via `AGENTORBIT_BUNDLE_ID` / `AGENTORBIT_VERSION`), GitHub Actions in `.github/workflows/` (`ci.yml`, `release.yml` für `v*`-Tags) und GitHub Pages unter `docs/index.html`.
+- **Open-Source- & Release-Setup (`SimHub/AgentOrbit`):** MIT-`LICENSE`, neutrale Default-Bundle-ID `dev.agentorbit.AgentOrbit` (überschreibbar via `AGENTORBIT_BUNDLE_ID` / `AGENTORBIT_VERSION`), GitHub Actions in `.github/workflows/` (`ci.yml`, `release.yml` für `v*`-Tags), Sponsoring via `.github/FUNDING.yml` (`buy_me_a_coffee: simhub`), Agent-Installer `scripts/install.sh` (`--from-source`) und GitHub Pages unter `docs/index.html` (+ `docs/assets/icon.png`).
 - **Icon-Build:** `AppIcon.icns` wird in `scripts/build_app.sh` direkt in Swift inkl. `TOC `-Header und Retina-Chunks (`ic11`–`ic14`) erzeugt (kein `iconutil`, da Sandbox-Tempdir-abhängig).
 
 ## Build, Start & Tests
