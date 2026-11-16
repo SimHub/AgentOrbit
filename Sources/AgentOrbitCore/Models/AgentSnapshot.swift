@@ -23,6 +23,7 @@ public struct CustomAgentConfig: Codable, Equatable, Sendable, Identifiable {
 }
 
 public enum AgentRunState: String, Sendable {
+    case needsInput = "Eingabe nötig"
     case running = "Aktiv"
     case idle = "Idle"
     case offline = "Offline"
@@ -30,6 +31,14 @@ public enum AgentRunState: String, Sendable {
 
     public var isLive: Bool {
         self == .running
+    }
+
+    public var isWaitingForUser: Bool {
+        self == .needsInput
+    }
+
+    public var isActiveOrWaiting: Bool {
+        self == .running || self == .needsInput
     }
 }
 
@@ -117,6 +126,7 @@ public struct AgentSnapshot: Sendable, Equatable, Identifiable {
     public var activeSince: Date?
     public var resolvedSourcePath: String?
     public var statusMessage: String?
+    public var interactionReason: String?
 
     public var id: String { "\(agentLabel):\(sessionID)" }
 
@@ -135,7 +145,8 @@ public struct AgentSnapshot: Sendable, Equatable, Identifiable {
         lastUpdated: Date?,
         activeSince: Date? = nil,
         resolvedSourcePath: String?,
-        statusMessage: String?
+        statusMessage: String?,
+        interactionReason: String? = nil
     ) {
         self.kind = kind
         self.sessionID = sessionID ?? kind.rawValue
@@ -152,6 +163,7 @@ public struct AgentSnapshot: Sendable, Equatable, Identifiable {
         self.activeSince = activeSince
         self.resolvedSourcePath = resolvedSourcePath
         self.statusMessage = statusMessage
+        self.interactionReason = interactionReason
     }
 
     public static func placeholder(
@@ -202,6 +214,31 @@ public struct CompletedSessionEvent: Sendable, Equatable, Identifiable {
         self.modelName = modelName
         self.durationSeconds = durationSeconds
         self.completedAt = completedAt
+    }
+}
+
+public struct NeedsInputEvent: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let agentLabel: String
+    public let projectName: String
+    public let modelName: String
+    public let reason: String
+    public let detectedAt: Date
+
+    public init(
+        id: String,
+        agentLabel: String,
+        projectName: String,
+        modelName: String,
+        reason: String,
+        detectedAt: Date = Date()
+    ) {
+        self.id = id
+        self.agentLabel = agentLabel
+        self.projectName = projectName
+        self.modelName = modelName
+        self.reason = reason
+        self.detectedAt = detectedAt
     }
 }
 
@@ -323,6 +360,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
     public var snapToGrid: Bool
     public var viewMode: ViewDensityMode
     public var notifyOnCompletion: Bool
+    public var notifyOnNeedsInput: Bool
     public var notifySound: Bool
     public var preferredLauncher: PreferredLauncher
     public var hotKeyPreset: HotKeyPreset
@@ -341,6 +379,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         snapToGrid: Bool = true,
         viewMode: ViewDensityMode = .compact,
         notifyOnCompletion: Bool = true,
+        notifyOnNeedsInput: Bool = true,
         notifySound: Bool = true,
         preferredLauncher: PreferredLauncher = .auto,
         hotKeyPreset: HotKeyPreset = .controlOptionO,
@@ -358,6 +397,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         self.snapToGrid = snapToGrid
         self.viewMode = viewMode
         self.notifyOnCompletion = notifyOnCompletion
+        self.notifyOnNeedsInput = notifyOnNeedsInput
         self.notifySound = notifySound
         self.preferredLauncher = preferredLauncher
         self.hotKeyPreset = hotKeyPreset
@@ -379,6 +419,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         snapToGrid = try container.decodeIfPresent(Bool.self, forKey: .snapToGrid) ?? true
         viewMode = try container.decodeIfPresent(ViewDensityMode.self, forKey: .viewMode) ?? .compact
         notifyOnCompletion = try container.decodeIfPresent(Bool.self, forKey: .notifyOnCompletion) ?? true
+        notifyOnNeedsInput = try container.decodeIfPresent(Bool.self, forKey: .notifyOnNeedsInput) ?? true
         notifySound = try container.decodeIfPresent(Bool.self, forKey: .notifySound) ?? true
         preferredLauncher = try container.decodeIfPresent(PreferredLauncher.self, forKey: .preferredLauncher) ?? .auto
         hotKeyPreset = try container.decodeIfPresent(HotKeyPreset.self, forKey: .hotKeyPreset) ?? .controlOptionO
@@ -401,6 +442,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
             snapToGrid: true,
             viewMode: .compact,
             notifyOnCompletion: true,
+            notifyOnNeedsInput: true,
             notifySound: true,
             preferredLauncher: .auto,
             hotKeyPreset: .controlOptionO,

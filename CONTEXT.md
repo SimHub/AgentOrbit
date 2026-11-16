@@ -8,10 +8,13 @@ Schlanke macOS-Menüleisten- & Desktop-HUD-App (Swift 6 / SwiftUI, ohne Xcode, ~
 
 ## Aktuelle Architektur & Features (relevant für Weiterentwicklung)
 
-- **Multi-Projekt & Layout:** `CoordinatorMonitor` sammelt alle laufenden + aktuellen Sessions (24h). `PopoverView` skaliert responsiv (1–3 Spalten, `240–980 pt` ziehbar) mit den Stufen `Minimal`, `Kompakt`, `Detail`.
+- **Multi-Projekt & Layout:** `CoordinatorMonitor` sammelt alle laufenden + aktuellen Sessions (24h). `PopoverView` skaliert responsiv (1–3 Spalten, `240–980 pt` ziehbar) mit den Stufen `Minimal`, `Kompakt`, `Detail`. `.needsInput` (`Eingabe nötig`) sortiert vor `.running` (`Aktiv`) und `.idle`.
 - **Desktop-HUD & Snap-Grid:** `PinnedWindowController` nutzt `DragGesture` (nicht `isMovableByWindowBackground`, da WindowServer Events schluckt) + `GridSnapCalculator` (`24 pt`-Grid, 9 Anker, `⌥` = frei) und `hudOpacity`.
+- **Reader-Besonderheiten (Interaktion / Status):**
+  - Antigravity: `conversations/<id>.db` → `steps.status == 9` signalisiert `WAITING` (während `conversation_summaries.db` `CASCADE_RUN_STATUS_RUNNING` / `not_fully_idle=1` hält).
+  - Codex: Offener Turn (`task_started` ohne `task_complete`/`turn_aborted`) mit offenem `request_user_input*` oder wartendem `exec`/`exec_command`/`apply_patch` (`age >= 10s`, `approval_mode != 'never'`) → `.needsInput`.
 - **System-Integrationen (reine Apple-Frameworks):**
-  - `UserNotifications` (`CompletionNotifier`): `Aktiv` → `Idle` Meldungen (`>= 3s`, erst nach Initial-Refresh).
+  - `UserNotifications` (`CompletionNotifier`): `Aktiv` → `Idle` (`notifyOnCompletion`, `>= 3s`) sowie `→ Eingabe nötig` (`notifyOnNeedsInput`), erst nach Initial-Refresh.
   - `Carbon` (`HotKeyController`): Globaler Hotkey ohne Accessibility-Rechte (Default `⌃⌥ O`).
   - `ServiceManagement` (`LaunchAtLoginController`): `SMAppService.mainApp` für Login-Start.
   - `ProjectLauncher`: 1-Klick-Start via `NSWorkspace` (Auto / Antigravity / VS Code / Cursor / Terminal / Finder).

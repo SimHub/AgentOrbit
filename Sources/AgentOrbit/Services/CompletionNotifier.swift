@@ -22,7 +22,21 @@ final class CompletionNotifier {
     }
 
     func notify(_ events: [CompletedSessionEvent], playSound: Bool) {
-        guard !events.isEmpty, isAppBundle else { return }
+        guard !events.isEmpty else { return }
+        enqueueAfterAuthorization {
+            Self.deliverCompletion(events, playSound: playSound)
+        }
+    }
+
+    func notifyNeedsInput(_ events: [NeedsInputEvent], playSound: Bool) {
+        guard !events.isEmpty else { return }
+        enqueueAfterAuthorization {
+            Self.deliverNeedsInput(events, playSound: playSound)
+        }
+    }
+
+    private func enqueueAfterAuthorization(_ action: @escaping @MainActor () -> Void) {
+        guard isAppBundle else { return }
         let center = UNUserNotificationCenter.current()
 
         if !hasRequestedAuthorization {
@@ -30,7 +44,7 @@ final class CompletionNotifier {
             center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
                 guard granted else { return }
                 Task { @MainActor in
-                    Self.deliver(events, playSound: playSound)
+                    action()
                 }
             }
             return
@@ -40,12 +54,12 @@ final class CompletionNotifier {
             let allowed = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
             guard allowed else { return }
             Task { @MainActor in
-                Self.deliver(events, playSound: playSound)
+                action()
             }
         }
     }
 
-    private static func deliver(
+    private static func deliverCompletion(
         _ events: [CompletedSessionEvent],
         playSound: Bool
     ) {
@@ -65,6 +79,32 @@ final class CompletionNotifier {
 
             let request = UNNotificationRequest(
                 identifier: "agentorbit.done.\(event.id).\(Int(event.completedAt.timeIntervalSince1970))",
+                content: content,
+                trigger: nil
+            )
+            center.add(request, withCompletionHandler: nil)
+        }
+    }
+
+    private static func deliverNeedsInput(
+        _ events: [NeedsInputEvent],
+        playSound: Bool
+    ) {
+        let center = UNUserNotificationCenter.current()
+        for event in events {
+            let content = UNMutableNotificationContent()
+            content.title = "\(event.agentLabel) wartet auf dich"
+            if event.projectName != "—" {
+                content.body = "\(event.projectName) · \(event.reason)"
+            } else {
+                content.body = event.reason
+            }
+            if playSound {
+                content.sound = .default
+            }
+
+            let request = UNNotificationRequest(
+                identifier: "agentorbit.wait.\(event.id).\(Int(event.detectedAt.timeIntervalSince1970))",
                 content: content,
                 trigger: nil
             )

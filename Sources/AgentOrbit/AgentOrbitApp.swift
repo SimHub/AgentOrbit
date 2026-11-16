@@ -25,7 +25,13 @@ struct AgentOrbitApp: App {
             let playSound = monitor?.config.notifySound ?? true
             CompletionNotifier.shared.notify(events, playSound: playSound)
         }
-        CompletionNotifier.shared.prepareIfNeeded(enabled: monitor.config.notifyOnCompletion)
+        monitor.onSessionsNeedsInput = { [weak monitor] events in
+            let playSound = monitor?.config.notifySound ?? true
+            CompletionNotifier.shared.notifyNeedsInput(events, playSound: playSound)
+        }
+        CompletionNotifier.shared.prepareIfNeeded(
+            enabled: monitor.config.notifyOnCompletion || monitor.config.notifyOnNeedsInput
+        )
         _monitor = StateObject(wrappedValue: monitor)
         _uiState = StateObject(wrappedValue: uiState)
         HotKeyController.shared.configure(preset: monitor.config.hotKeyPreset) { [weak monitor, weak uiState] in
@@ -46,10 +52,27 @@ struct AgentOrbitApp: App {
             PopoverView(monitor: monitor, uiState: uiState)
         } label: {
             HStack(spacing: 4) {
-                Image(nsImage: BrandIconFactory.menuBarImage(isLive: monitor.isAnyLive))
+                Image(nsImage: BrandIconFactory.menuBarImage(
+                    isLive: monitor.isAnyLive,
+                    needsInput: monitor.isAnyWaitingForUser
+                ))
                     .renderingMode(.template)
 
-                if monitor.liveSessionCount > 1 {
+                if monitor.needsInputCount > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "hand.raised.fill")
+                            .font(.system(size: 8.5, weight: .bold))
+                        Text("\(monitor.needsInputCount)")
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 4.5)
+                    .padding(.vertical, 0.5)
+                    .background(Color.orange.opacity(0.24), in: Capsule())
+                    .foregroundStyle(.orange)
+                }
+
+                if monitor.liveSessionCount > 1 || (monitor.liveSessionCount > 0 && monitor.needsInputCount > 0) {
                     Text("\(monitor.liveSessionCount)")
                         .font(.system(size: 10.5, weight: .bold, design: .rounded))
                         .monospacedDigit()

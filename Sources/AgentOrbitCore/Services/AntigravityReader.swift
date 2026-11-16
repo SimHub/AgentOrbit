@@ -88,29 +88,31 @@ enum AntigravityReader {
             let statusRaw = row["status"]?.stringValue ?? ""
             let notFullyIdle = (row["not_fully_idle"]?.intValue ?? 0) != 0
             let isRunning = statusRaw.contains("RUNNING") || notFullyIdle
-            let state: AgentRunState = isRunning ? .running : .idle
+            let convDetails = conversationID.flatMap { activeConversationDetails(in: resolvedRoot, conversationID: $0) }
+            let isWaiting = statusRaw.contains("WAITING") || (isRunning && convDetails?.latestStepStatus == 9)
+            let state: AgentRunState = isWaiting ? .needsInput : (isRunning ? .running : .idle)
+            let interactionReason: String? = isWaiting ? "Freigabe / Eingabe" : nil
             let modifiedDate = row["last_modified_time"]?.stringValue.flatMap(parseSQLiteDate)
             let age = modifiedDate.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
 
             let projectKey = workspacePath ?? sessionID
-            // Always keep running conversations and the primary latest conversation;
+            // Always keep active/waiting conversations and the primary latest conversation;
             // for idle conversations, deduplicate by project and skip stale (> 24h) ones beyond the first.
-            if state != .running && !results.isEmpty {
+            if !state.isActiveOrWaiting && !results.isEmpty {
                 if seenProjects.contains(projectKey) || age > 86_400 {
                     continue
                 }
             }
             seenProjects.insert(projectKey)
 
-            let activeConvModel = conversationID.flatMap { activeConversationModel(in: resolvedRoot, conversationID: $0) }
             let chosenRawModelID: String?
-            if let activeConvModel {
-                let stateIsNewer = if let statePbtxtMtime, let convMtime = activeConvModel.mtime {
+            if let enumID = convDetails?.enumID {
+                let stateIsNewer = if let statePbtxtMtime, let convMtime = convDetails?.mtime {
                     statePbtxtMtime.timeIntervalSince(convMtime) > 2
                 } else {
                     false
                 }
-                chosenRawModelID = stateIsNewer ? (rawStateModelID ?? activeConvModel.enumID) : activeConvModel.enumID
+                chosenRawModelID = stateIsNewer ? (rawStateModelID ?? enumID) : enumID
             } else {
                 chosenRawModelID = rawStateModelID
             }
@@ -167,7 +169,8 @@ enum AntigravityReader {
                 usage: usage,
                 lastUpdated: lastUpdated,
                 resolvedSourcePath: resolvedRoot.path,
-                statusMessage: nil
+                statusMessage: nil,
+                interactionReason: interactionReason
             ))
 
             if results.count >= limit {
@@ -302,13 +305,14 @@ enum AntigravityReader {
         return mapping
     }
 
-    private struct ActiveConvModel {
-        let enumID: String
-        let displayName: String
+    private struct ActiveConvDetails {
+        let enumID: String?
+        let displayName: String?
         let mtime: Date?
+        let latestStepStatus: Int?
     }
 
-    private static func activeConversationModel(in resolvedRoot: URL, conversationID: String) -> ActiveConvModel? {
+    private static func activeConversationDetails(in resolvedRoot: URL, conversationID: String) -> ActiveConvDetails? {
         let convDB = resolvedRoot
             .appendingPathComponent("conversations")
             .appendingPathComponent("\(conversationID).db")
@@ -317,6 +321,8 @@ enum AntigravityReader {
         let walURL = URL(fileURLWithPath: convDB.path + "-wal")
         let mtime = [modificationDate(of: convDB), modificationDate(of: walURL)].compactMap { $0 }.max()
 
+        var foundEnumID: String?
+        var foundDisplay: String?
         let rows = SQLiteReader.query(
             databaseURL: convDB,
             sql: "SELECT data FROM gen_metadata ORDER BY idx DESC LIMIT 5"
@@ -324,10 +330,25 @@ enum AntigravityReader {
         for row in rows {
             if let blob = row["data"]?.dataValue,
                let extracted = extractGenMetadataModel(from: blob) {
-                return ActiveConvModel(enumID: extracted.enumID, displayName: extracted.displayName, mtime: mtime)
+                foundEnumID = extracted.enumID
+                foundDisplay = extracted.displayName
+                break
             }
         }
-        return nil
+
+        let stepRows = SQLiteReader.query(
+            databaseURL: convDB,
+            sql: "SELECT status FROM steps ORDER BY idx DESC LIMIT 1"
+        )
+        let latestStepStatus = stepRows.first?["status"]?.intValue
+
+        guard foundEnumID != nil || latestStepStatus != nil else { return nil }
+        return ActiveConvDetails(
+            enumID: foundEnumID,
+            displayName: foundDisplay,
+            mtime: mtime,
+            latestStepStatus: latestStepStatus
+        )
     }
 
     private static func modificationDate(of url: URL) -> Date? {

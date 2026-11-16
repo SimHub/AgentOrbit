@@ -152,7 +152,7 @@ struct PopoverView: View {
     private var displayedSnapshots: [AgentSnapshot] {
         let all = monitor.sessions
         if uiState.onlyActiveFilter {
-            let live = all.filter { $0.state.isLive }
+            let live = all.filter { $0.state.isActiveOrWaiting }
             if !live.isEmpty {
                 return live
             }
@@ -211,7 +211,11 @@ struct PopoverView: View {
     private var header: some View {
         let isUltraNarrow = panelWidth < 280
         return HStack(spacing: isUltraNarrow ? 6 : 8) {
-            BrandBadgeView(size: isUltraNarrow ? 19 : 22, isLive: monitor.isAnyLive)
+            BrandBadgeView(
+                size: isUltraNarrow ? 19 : 22,
+                isLive: monitor.isAnyLive,
+                needsInput: monitor.isAnyWaitingForUser
+            )
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("AgentOrbit")
@@ -220,7 +224,9 @@ struct PopoverView: View {
                 if !isUltraNarrow {
                     Text(subtitleText)
                         .font(.system(size: 10))
-                        .foregroundStyle(monitor.isAnyLive ? Color.green : Color.secondary)
+                        .foregroundStyle(
+                            monitor.isAnyWaitingForUser ? Color.orange : (monitor.isAnyLive ? Color.green : Color.secondary)
+                        )
                         .lineLimit(1)
                 }
             }
@@ -306,18 +312,36 @@ struct PopoverView: View {
     }
 
     private var subtitleText: String {
-        let base = monitor.isAnyLive ? "Echtzeit · Aktiv" : "Echtzeit · Bereit"
+        let base: String = if monitor.isAnyWaitingForUser {
+            "Echtzeit · Eingabe nötig"
+        } else if monitor.isAnyLive {
+            "Echtzeit · Aktiv"
+        } else {
+            "Echtzeit · Bereit"
+        }
         return isInPinnedPanel ? "\(base) · Angepinnt" : base
     }
 
     private var previewBody: some View {
         let snapshots = displayedSnapshots
+        let waitingCount = monitor.sessions.filter { $0.state.isWaitingForUser }.count
         let liveCount = monitor.sessions.filter { $0.state.isLive }.count
+        let activeOrWaitingCount = waitingCount + liveCount
 
         return VStack(spacing: 10) {
-            if monitor.sessions.count > 2 {
+            if monitor.sessions.count > 2 || waitingCount > 0 {
                 HStack(spacing: 8) {
                     HStack(spacing: 5) {
+                        if waitingCount > 0 {
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 6, height: 6)
+                            Text("\(waitingCount) Wartet")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.orange)
+                            Text("·")
+                                .foregroundStyle(.tertiary)
+                        }
                         if liveCount > 0 {
                             Circle()
                                 .fill(Color.green)
@@ -335,7 +359,7 @@ struct PopoverView: View {
 
                     Spacer()
 
-                    if liveCount > 0 && liveCount < monitor.sessions.count {
+                    if activeOrWaitingCount > 0 && activeOrWaitingCount < monitor.sessions.count {
                         Button {
                             withAnimation(.easeInOut(duration: 0.15)) {
                                 uiState.onlyActiveFilter.toggle()
@@ -561,8 +585,10 @@ private struct AgentCardView: View {
         .overlay(
             RoundedRectangle(cornerRadius: viewMode == .minimal ? 8 : 10, style: .continuous)
                 .strokeBorder(
-                    snapshot.state.isLive ? statusColor.opacity(0.35) : Color.primary.opacity(0.08),
-                    lineWidth: 1
+                    snapshot.state.isWaitingForUser
+                        ? statusColor.opacity(0.65)
+                        : (snapshot.state.isLive ? statusColor.opacity(0.35) : Color.primary.opacity(0.08)),
+                    lineWidth: snapshot.state.isWaitingForUser ? 1.25 : 1
                 )
         )
         .contextMenu {
@@ -623,7 +649,19 @@ private struct AgentCardView: View {
 
                 Spacer(minLength: 4)
 
-                if snapshot.state.isLive, let since = snapshot.activeSince {
+                if snapshot.state.isWaitingForUser {
+                    HStack(spacing: 3) {
+                        Image(systemName: "hand.raised.fill")
+                            .font(.system(size: 8.5, weight: .semibold))
+                        Text("Wartet")
+                            .font(.system(size: 9.5, weight: .semibold))
+                    }
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.orange.opacity(0.14), in: Capsule())
+                    .lineLimit(1)
+                } else if snapshot.state.isLive, let since = snapshot.activeSince {
                     LiveDurationLabel(since: since, prefix: "")
                         .font(.system(size: 9.5, weight: .medium))
                         .foregroundStyle(.green)
@@ -682,7 +720,13 @@ private struct AgentCardView: View {
                     .foregroundStyle(.secondary)
 
                 Group {
-                    if snapshot.state.isLive, let since = snapshot.activeSince {
+                    if snapshot.state.isWaitingForUser {
+                        HStack(spacing: 3.5) {
+                            Image(systemName: "hand.raised.fill")
+                                .font(.system(size: 8.5, weight: .semibold))
+                            Text(snapshot.interactionReason ?? snapshot.state.rawValue)
+                        }
+                    } else if snapshot.state.isLive, let since = snapshot.activeSince {
                         LiveDurationLabel(since: since, prefix: "Aktiv · ")
                     } else {
                         Text(snapshot.state.rawValue)
@@ -692,7 +736,7 @@ private struct AgentCardView: View {
                 .foregroundStyle(statusColor)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 1.5)
-                .background(statusColor.opacity(0.12), in: Capsule())
+                .background(statusColor.opacity(snapshot.state.isWaitingForUser ? 0.16 : 0.12), in: Capsule())
 
                 Spacer()
 
@@ -938,6 +982,7 @@ private struct AgentCardView: View {
 
     private var statusColor: Color {
         switch snapshot.state {
+        case .needsInput: return .orange
         case .running: return .green
         case .idle: return .blue
         case .offline: return .orange

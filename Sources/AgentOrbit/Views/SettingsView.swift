@@ -202,18 +202,30 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .onChange(of: monitor.config.notifyOnCompletion) { _, enabled in
-                        CompletionNotifier.shared.prepareIfNeeded(enabled: enabled)
+                        CompletionNotifier.shared.prepareIfNeeded(
+                            enabled: enabled || monitor.config.notifyOnNeedsInput
+                        )
                     }
 
                 Spacer()
 
-                if monitor.config.notifyOnCompletion {
+                if monitor.config.notifyOnCompletion || monitor.config.notifyOnNeedsInput {
                     Toggle("Ton", isOn: $monitor.config.notifySound)
                         .font(.system(size: 10.5))
                         .toggleStyle(.checkbox)
                         .controlSize(.mini)
                 }
             }
+
+            Toggle("Meldung bei Eingabe nötig (Freigabe / Rückfrage)", isOn: $monitor.config.notifyOnNeedsInput)
+                .font(.system(size: 11))
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .onChange(of: monitor.config.notifyOnNeedsInput) { _, enabled in
+                    CompletionNotifier.shared.prepareIfNeeded(
+                        enabled: enabled || monitor.config.notifyOnCompletion
+                    )
+                }
 
             Toggle("Kosten-Schätzung (~$)", isOn: $monitor.config.showEstimatedCost)
                 .font(.system(size: 11))

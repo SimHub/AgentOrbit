@@ -9,6 +9,9 @@ enum CodexReader {
     struct SessionTailMetrics: Sendable, Equatable {
         var usage: UsageMetrics
         var lastEventDate: Date?
+        var hasOpenTurn: Bool = false
+        var pendingUserInputTool: String? = nil
+        var pendingApprovalTool: String? = nil
     }
 
     static func read(rawPath: String, watchedFolders: [WatchedFolderStatus]) -> AgentSnapshot {
@@ -36,10 +39,13 @@ enum CodexReader {
         let configDefaults = parseConfigToml(at: resolvedRoot.appendingPathComponent("config.toml"))
         let dbURL = resolvedRoot.appendingPathComponent("state_5.sqlite")
         let fetchCount = max(limit * 2, 12)
+        let threadColumns = SQLiteReader.query(databaseURL: dbURL, sql: "PRAGMA table_info(threads)")
+            .compactMap { $0["name"]?.stringValue }
+        let approvalSelect = threadColumns.contains("approval_mode") ? ", approval_mode" : ""
         let rows = SQLiteReader.query(
             databaseURL: dbURL,
             sql: """
-            SELECT id, cwd, model, reasoning_effort, tokens_used, git_branch, updated_at, title, rollout_path
+            SELECT id, cwd, model, reasoning_effort, tokens_used, git_branch, updated_at, title, rollout_path\(approvalSelect)
             FROM threads
             WHERE archived = 0
             ORDER BY updated_at DESC
@@ -95,12 +101,33 @@ enum CodexReader {
 
             let age = newestTimestamp.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
             let isVeryRecent = age < 20
-            let state: AgentRunState = ((hasActiveWriterLock && isVeryRecent) || age < 8) ? .running : .idle
+            let approvalMode = nonEmpty(row["approval_mode"]?.stringValue)?.lowercased()
+            let approvalAllowed = (approvalMode != "never")
+
+            let state: AgentRunState
+            let interactionReason: String?
+            if tailMetrics.pendingUserInputTool != nil, age < 86_400 {
+                state = .needsInput
+                interactionReason = "Rückfrage"
+            } else if tailMetrics.hasOpenTurn,
+                      let pendingTool = tailMetrics.pendingApprovalTool,
+                      approvalAllowed,
+                      age >= 10,
+                      age < 7_200 {
+                state = .needsInput
+                interactionReason = (pendingTool == "apply_patch") ? "Patch-Freigabe" : "Freigabe nötig"
+            } else if (hasActiveWriterLock && isVeryRecent) || age < 8 || (tailMetrics.hasOpenTurn && age < 25) {
+                state = .running
+                interactionReason = nil
+            } else {
+                state = .idle
+                interactionReason = nil
+            }
 
             let projectKey = cwd ?? threadID
-            // Always keep running sessions and the primary latest session;
+            // Always keep active/waiting sessions and the primary latest session;
             // for idle sessions, show at most one per project and skip stale (> 24h) sessions beyond the first.
-            if state != .running && !results.isEmpty {
+            if !state.isActiveOrWaiting && !results.isEmpty {
                 if seenProjects.contains(projectKey) || age > 86_400 {
                     continue
                 }
@@ -123,7 +150,8 @@ enum CodexReader {
                 usage: tailMetrics.usage,
                 lastUpdated: newestTimestamp,
                 resolvedSourcePath: resolvedRoot.path,
-                statusMessage: nil
+                statusMessage: nil,
+                interactionReason: interactionReason
             ))
 
             if results.count >= limit {
@@ -183,44 +211,95 @@ enum CodexReader {
 
         var usage = UsageMetrics()
         var lastDate: Date?
+        var hasOpenTurn = false
+        var pendingCalls: [String: String] = [:]
+        var pendingOrder: [String] = []
 
-        for rawLine in lines.reversed() {
+        for rawLine in lines {
             guard
                 let lineData = rawLine.data(using: .utf8),
                 let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any]
             else { continue }
 
-            if lastDate == nil, let ts = json["timestamp"] as? String {
-                lastDate = parseISO8601(ts)
+            if let ts = json["timestamp"] as? String, let parsed = parseISO8601(ts) {
+                lastDate = parsed
             }
 
-            guard
-                let payload = json["payload"] as? [String: Any],
-                (payload["type"] as? String) == "token_count"
-            else { continue }
+            let topType = json["type"] as? String
+            guard let payload = json["payload"] as? [String: Any] else { continue }
+            let payloadType = payload["type"] as? String
 
-            if let info = payload["info"] as? [String: Any] {
-                if let total = info["total_token_usage"] as? [String: Any] {
-                    usage.sessionTotalTokens = intValue(total["total_tokens"])
-                    usage.inputTokens = intValue(total["input_tokens"])
-                    usage.cacheReadTokens = intValue(total["cached_input_tokens"])
-                    usage.outputTokens = intValue(total["output_tokens"])
+            if topType == "event_msg" {
+                switch payloadType {
+                case "task_started":
+                    hasOpenTurn = true
+                    pendingCalls.removeAll()
+                    pendingOrder.removeAll()
+                case "task_complete", "turn_aborted":
+                    hasOpenTurn = false
+                    pendingCalls.removeAll()
+                    pendingOrder.removeAll()
+                case "token_count":
+                    if let info = payload["info"] as? [String: Any] {
+                        if let total = info["total_token_usage"] as? [String: Any] {
+                            usage.sessionTotalTokens = intValue(total["total_tokens"])
+                            usage.inputTokens = intValue(total["input_tokens"])
+                            usage.cacheReadTokens = intValue(total["cached_input_tokens"])
+                            usage.outputTokens = intValue(total["output_tokens"])
+                        }
+                        if let last = info["last_token_usage"] as? [String: Any] {
+                            usage.contextTokens = intValue(last["total_tokens"]) ?? intValue(last["input_tokens"])
+                        }
+                        usage.contextWindow = intValue(info["model_context_window"])
+                    }
+                    if let limits = payload["rate_limits"] as? [String: Any] {
+                        usage.planType = limits["plan_type"] as? String
+                        usage.primaryLimit = parseRateLimitWindow(limits["primary"] as? [String: Any])
+                        usage.secondaryLimit = parseRateLimitWindow(limits["secondary"] as? [String: Any])
+                    }
+                default:
+                    break
                 }
-                if let last = info["last_token_usage"] as? [String: Any] {
-                    usage.contextTokens = intValue(last["total_tokens"]) ?? intValue(last["input_tokens"])
+            } else if topType == "response_item" {
+                switch payloadType {
+                case "function_call", "custom_tool_call":
+                    if let callID = payload["call_id"] as? String,
+                       let name = payload["name"] as? String,
+                       !callID.isEmpty, !name.isEmpty {
+                        hasOpenTurn = true
+                        pendingCalls[callID] = name
+                        pendingOrder.append(callID)
+                    }
+                case "function_call_output", "custom_tool_call_output":
+                    if let callID = payload["call_id"] as? String {
+                        pendingCalls.removeValue(forKey: callID)
+                    }
+                default:
+                    break
                 }
-                usage.contextWindow = intValue(info["model_context_window"])
             }
-
-            if let limits = payload["rate_limits"] as? [String: Any] {
-                usage.planType = limits["plan_type"] as? String
-                usage.primaryLimit = parseRateLimitWindow(limits["primary"] as? [String: Any])
-                usage.secondaryLimit = parseRateLimitWindow(limits["secondary"] as? [String: Any])
-            }
-            break
         }
 
-        return SessionTailMetrics(usage: usage, lastEventDate: lastDate)
+        var pendingUserInputTool: String?
+        var pendingApprovalTool: String?
+        for callID in pendingOrder.reversed() {
+            guard let name = pendingCalls[callID] else { continue }
+            if pendingUserInputTool == nil,
+               name == "request_user_input" || name == "request_user_input_async" {
+                pendingUserInputTool = name
+            } else if pendingApprovalTool == nil,
+                      name == "exec" || name == "exec_command" || name == "apply_patch" {
+                pendingApprovalTool = name
+            }
+        }
+
+        return SessionTailMetrics(
+            usage: usage,
+            lastEventDate: lastDate,
+            hasOpenTurn: hasOpenTurn,
+            pendingUserInputTool: pendingUserInputTool,
+            pendingApprovalTool: pendingApprovalTool
+        )
     }
 
     private static func resolveRolloutURL(rolloutPath: String?, codexRoot: URL) -> URL? {

@@ -3,7 +3,7 @@ import SwiftUI
 
 enum BrandIconFactory {
     @MainActor
-    static func menuBarImage(isLive: Bool) -> NSImage {
+    static func menuBarImage(isLive: Bool, needsInput: Bool = false) -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: false) { rect in
             NSColor.black.setStroke()
@@ -35,10 +35,10 @@ enum BrandIconFactory {
             let nodeB = NSRect(x: center.x - 6.4, y: center.y - 6.0, width: 2.6, height: 2.6)
             NSBezierPath(ovalIn: nodeB).fill()
 
-            if isLive {
-                // Small active pulse ring around core
+            if isLive || needsInput {
+                // Small active/waiting pulse ring around core
                 let pulse = NSBezierPath()
-                pulse.lineWidth = 1.0
+                pulse.lineWidth = needsInput ? 1.3 : 1.0
                 pulse.appendArc(withCenter: center, radius: 4.1, startAngle: 0, endAngle: 360)
                 pulse.stroke()
             }
@@ -53,6 +53,7 @@ enum BrandIconFactory {
 struct BrandBadgeView: View {
     var size: CGFloat = 24
     var isLive: Bool = false
+    var needsInput: Bool = false
 
     var body: some View {
         ZStack {
@@ -91,7 +92,10 @@ struct BrandBadgeView: View {
                     width: coreSize,
                     height: coreSize
                 )
-                context.fill(Path(ellipseIn: coreRect), with: .color(isLive ? .green : .white))
+                context.fill(
+                    Path(ellipseIn: coreRect),
+                    with: .color(needsInput ? .orange : (isLive ? .green : .white))
+                )
 
                 let satSize = size * 0.12
                 let sat1 = CGRect(x: center.x + r * 0.55, y: center.y - r * 0.85, width: satSize, height: satSize)

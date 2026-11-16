@@ -23,6 +23,7 @@ public final class CoordinatorMonitor: ObservableObject {
     @Published public private(set) var lastRefresh: Date = .now
 
     public var onSessionsCompleted: (([CompletedSessionEvent]) -> Void)?
+    public var onSessionsNeedsInput: (([NeedsInputEvent]) -> Void)?
 
     private var watcher: FSEventsWatcher?
     private var refreshTimer: AnyCancellable?
@@ -42,13 +43,15 @@ public final class CoordinatorMonitor: ObservableObject {
     }
 
     public var primarySnapshot: AgentSnapshot {
-        let candidates = sessions.filter { $0.state == .running || $0.state == .idle }
+        let candidates = sessions.filter { $0.state.isActiveOrWaiting || $0.state == .idle }
         guard !candidates.isEmpty else {
             return antigravity.state != .unavailable ? antigravity : codex
         }
         return candidates.max { lhs, rhs in
-            if lhs.state.isLive != rhs.state.isLive {
-                return !lhs.state.isLive && rhs.state.isLive
+            let lhsRank = Self.stateRank(lhs.state)
+            let rhsRank = Self.stateRank(rhs.state)
+            if lhsRank != rhsRank {
+                return lhsRank > rhsRank
             }
             return (lhs.lastUpdated ?? .distantPast) < (rhs.lastUpdated ?? .distantPast)
         } ?? antigravity
@@ -58,8 +61,16 @@ public final class CoordinatorMonitor: ObservableObject {
         sessions.filter { $0.state.isLive }.count
     }
 
+    public var needsInputCount: Int {
+        sessions.filter { $0.state.isWaitingForUser }.count
+    }
+
     public var isAnyLive: Bool {
         liveSessionCount > 0
+    }
+
+    public var isAnyWaitingForUser: Bool {
+        needsInputCount > 0
     }
 
     public var menuBarLabelText: String? {
@@ -154,6 +165,16 @@ public final class CoordinatorMonitor: ObservableObject {
                     []
                 }
 
+                let needsInputEvents: [NeedsInputEvent] = if self.hasCompletedInitialRefresh && self.config.notifyOnNeedsInput {
+                    Self.detectNeedsInputSessions(
+                        previous: self.sessions,
+                        current: combined,
+                        now: now
+                    )
+                } else {
+                    []
+                }
+
                 let enriched = Self.reconcileActiveStartTimes(
                     sessions: combined,
                     activeStartTimes: &self.activeStartTimes,
@@ -167,6 +188,9 @@ public final class CoordinatorMonitor: ObservableObject {
                 self.hasCompletedInitialRefresh = true
                 if !completedEvents.isEmpty {
                     self.onSessionsCompleted?(completedEvents)
+                }
+                if !needsInputEvents.isEmpty {
+                    self.onSessionsNeedsInput?(needsInputEvents)
                 }
                 self.isRefreshing = false
                 if self.pendingRefresh {
@@ -208,6 +232,30 @@ public final class CoordinatorMonitor: ObservableObject {
         return events
     }
 
+    public nonisolated static func detectNeedsInputSessions(
+        previous: [AgentSnapshot],
+        current: [AgentSnapshot],
+        now: Date = Date()
+    ) -> [NeedsInputEvent] {
+        let prevByID = Dictionary(previous.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var events: [NeedsInputEvent] = []
+
+        for curr in current where curr.state.isWaitingForUser {
+            if let prev = prevByID[curr.id], prev.state.isWaitingForUser {
+                continue
+            }
+            events.append(NeedsInputEvent(
+                id: curr.id,
+                agentLabel: curr.agentLabel,
+                projectName: curr.projectName,
+                modelName: curr.modelName,
+                reason: curr.interactionReason ?? "Eingabe nötig",
+                detectedAt: now
+            ))
+        }
+        return events
+    }
+
     public nonisolated static func reconcileActiveStartTimes(
         sessions: [AgentSnapshot],
         activeStartTimes: inout [String: Date],
@@ -216,7 +264,7 @@ public final class CoordinatorMonitor: ObservableObject {
         var liveIDs: Set<String> = []
         let updated: [AgentSnapshot] = sessions.map { session in
             var copy = session
-            if copy.state.isLive {
+            if copy.state.isActiveOrWaiting {
                 liveIDs.insert(copy.id)
                 if let existing = activeStartTimes[copy.id] {
                     copy.activeSince = existing
@@ -260,10 +308,11 @@ public final class CoordinatorMonitor: ObservableObject {
 
     nonisolated private static func stateRank(_ state: AgentRunState) -> Int {
         switch state {
-        case .running: return 0
-        case .idle: return 1
-        case .offline: return 2
-        case .unavailable: return 3
+        case .needsInput: return 0
+        case .running: return 1
+        case .idle: return 2
+        case .offline: return 3
+        case .unavailable: return 4
         }
     }
 

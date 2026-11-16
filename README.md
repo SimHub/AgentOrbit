@@ -28,7 +28,7 @@ A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required
   - Resize from `240 pt` up to full screen width with automatic 1–3 column wrapping.
 - **3 View Densities:** `Minimal` (2-line corner widget, auto-enabled `< 290 pt`), `Kompakt`, and `Detail` (permanent usage & circular `Weekly` / `5h` rate-limit rings + reset timers).
 - **1-Click Project Launcher:** Open any active project directly in **Antigravity**, **VS Code**, **Cursor**, **Terminal** (Ghostty/Warp/iTerm/Terminal), or **Finder** (plus right-click context menu).
-- **Completion Notifications:** Native macOS notification (+ optional sound) when a running session finishes (`Aktiv → Idle`).
+- **Needs-Input & Completion Notifications:** Detects when Codex or Antigravity pauses for user approval or a question (`Eingabe nötig` orange menu bar & HUD badge) and sends native macOS notifications (+ optional sound) for both interaction requests and `Aktiv → Idle` completion.
 - **Zero-Config & Optional Cost Estimate:** Auto-discovers installed agent directories on first launch, supports Launch at Login (`SMAppService`), and optionally displays exact/estimated session costs (`~$0.xx`).
 - **Read-Only & Symlink-Safe:** Resolves symlinks (`resolvingSymlinksInPath`) for reliable `FSEvents` even on external SSDs and reads SQLite databases strictly read-only.
 
@@ -37,7 +37,7 @@ A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required
 - **Multi-Projekt-Übersicht:** Zeigt alle parallelen und aktuellen Sessions mit Projekt, Live-Git-Branch, Modell + Stärke, Laufzeit-Timer und Menüleisten-Counter.
 - **Desktop-HUD mit Einrast-Grid:** Anpinnbar (`⌃⌥ O`), stufenlos zieh- und skalierbar (`240 pt` bis Bildschirmbreite, 1–3 Spalten) mit `24 pt`-Raster & 9 Bildschirm-Ankern (`⌥` = frei platzieren) sowie einstellbarer Deckkraft.
 - **3 Ansichts-Stufen:** `Minimal`, `Kompakt`, `Detail` (inkl. runder `Weekly`/`5h`-Limit-Ringe und optionaler `~$`-Kosten-Schätzung).
-- **1-Klick-IDE-Starter & Fertig-Meldung:** Öffnet Projekte direkt im passenden Editor/Terminal und benachrichtigt nativ bei `Aktiv → Idle`.
+- **1-Klick-IDE-Starter, Wartet- & Fertig-Meldung:** Zeigt per orangem Badge + Mitteilung, sobald ein Agent auf deine Freigabe/Rückfrage wartet (`Eingabe nötig`) oder mit `Aktiv → Idle` fertig ist, und öffnet Projekte direkt im passenden Editor/Terminal.
 - **Zero-Config & Erweiterbar:** Auto-Discovery beim Erststart, „Bei Anmeldung starten“ und flexibel hinzufügbare Agents (`OpenCode`, `Pi`, `Claude`, eigene Ordner).
 
 ---
@@ -112,7 +112,7 @@ AGENTORBIT_BUNDLE_ID=dev.agentorbit.AgentOrbit AGENTORBIT_VERSION=1.0.0 ./script
 
 If AgentOrbit saves you time while juggling multiple coding agents, consider supporting the project:
 
-<a href="https://buymeacoffee.com/simhub"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support%20AgentOrbit-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
+<a href="https://buymeacoffee.com/simhub"><img src="docs/assets/buymeacoffee.gif" width="216" height="54" alt="Buy Me a Coffee" /></a>
 
 ---
 

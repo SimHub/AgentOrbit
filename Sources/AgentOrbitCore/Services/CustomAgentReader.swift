@@ -113,7 +113,7 @@ enum CustomAgentReader {
             let state: AgentRunState = age < 20 ? .running : .idle
 
             let projectKey = directory ?? sid
-            if state != .running && !results.isEmpty {
+            if !state.isActiveOrWaiting && !results.isEmpty {
                 if seenProjects.contains(projectKey) || age > 86_400 {
                     continue
                 }
@@ -206,7 +206,7 @@ enum CustomAgentReader {
             let cwd = parsed.cwd
             let projectKey = cwd ?? item.url.deletingPathExtension().lastPathComponent
 
-            if state != .running && !results.isEmpty {
+            if !state.isActiveOrWaiting && !results.isEmpty {
                 if seenProjects.contains(projectKey) || age > 86_400 {
                     continue
                 }

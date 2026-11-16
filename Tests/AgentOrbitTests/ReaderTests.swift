@@ -43,7 +43,10 @@ struct ReaderTestRunner {
             ("testActiveStartTimeTracking", testActiveStartTimeTracking),
             ("testCompletionTransitionDetection", testCompletionTransitionDetection),
             ("testAgentDiscovery", testAgentDiscovery),
-            ("testCostEstimator", testCostEstimator)
+            ("testCostEstimator", testCostEstimator),
+            ("testCodexNeedsInputDetection", testCodexNeedsInputDetection),
+            ("testAntigravityWaitingStepDetection", testAntigravityWaitingStepDetection),
+            ("testNeedsInputTransitionDetection", testNeedsInputTransitionDetection)
         ]
 
         var passed = 0
@@ -441,6 +444,154 @@ struct ReaderTestRunner {
         let agyCost = CostEstimator.estimate(usage: agyUsage, modelName: "Gemini 4 Hydrogen")
         try expectEqual(agyCost?.isEstimated, true)
         try expectEqual(agyCost?.formatted, "~$3.25")
+    }
+
+    static func testCodexNeedsInputDetection(tempRoot: URL) throws {
+        // 1. JSONL tail detects open request_user_input_async and clears on task_complete
+        let openUserPromptJSONL = """
+        {"timestamp":"2026-11-16T10:00:00Z","type":"event_msg","payload":{"type":"task_started"}}
+        {"timestamp":"2026-11-16T10:00:02Z","type":"response_item","payload":{"type":"function_call","name":"request_user_input_async","call_id":"call_u1"}}
+        """
+        let openMetrics = CodexReader.parseSessionJSONL(data: Data(openUserPromptJSONL.utf8))
+        try expectTrue(openMetrics.hasOpenTurn)
+        try expectEqual(openMetrics.pendingUserInputTool, "request_user_input_async")
+        try expectEqual(openMetrics.pendingApprovalTool, nil)
+
+        let closedJSONL = openUserPromptJSONL + "\n" + """
+        {"timestamp":"2026-11-16T10:00:05Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_u1"}}
+        {"timestamp":"2026-11-16T10:00:06Z","type":"event_msg","payload":{"type":"task_complete"}}
+        """
+        let closedMetrics = CodexReader.parseSessionJSONL(data: Data(closedJSONL.utf8))
+        try expectTrue(!closedMetrics.hasOpenTurn)
+        try expectEqual(closedMetrics.pendingUserInputTool, nil)
+        try expectEqual(closedMetrics.pendingApprovalTool, nil)
+
+        // 2. End-to-end approval wait (>= 10s old open exec call) with approval_mode = 'on-request'
+        let codexDir = tempRoot.appendingPathComponent("codex-needs-input")
+        try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
+
+        let staleDate = Date().addingTimeInterval(-30)
+        let staleISO = ISO8601DateFormatter().string(from: staleDate)
+        let rolloutURL = codexDir.appendingPathComponent("rollout-wait.jsonl")
+        let waitJSONL = """
+        {"timestamp":"\(staleISO)","type":"event_msg","payload":{"type":"task_started"}}
+        {"timestamp":"\(staleISO)","type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"call_exec_1"}}
+        """
+        try waitJSONL.write(to: rolloutURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: staleDate], ofItemAtPath: rolloutURL.path)
+
+        let dbURL = codexDir.appendingPathComponent("state_5.sqlite")
+        try execSQL(
+            at: dbURL,
+            sql: """
+            CREATE TABLE threads (
+                id TEXT PRIMARY KEY,
+                cwd TEXT NOT NULL,
+                model TEXT,
+                reasoning_effort TEXT,
+                tokens_used INTEGER NOT NULL DEFAULT 0,
+                git_branch TEXT,
+                updated_at INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                rollout_path TEXT NOT NULL,
+                approval_mode TEXT,
+                archived INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO threads (id, cwd, model, reasoning_effort, tokens_used, git_branch, updated_at, title, rollout_path, approval_mode, archived)
+            VALUES ('t-wait', '/tmp/wait-app', 'gpt-5', 'high', 1000, 'main', \(Int(staleDate.timeIntervalSince1970)), 'Wait Test', '\(rolloutURL.path)', 'on-request', 0);
+            """
+        )
+
+        let waitingSnap = CodexReader.read(rawPath: codexDir.path, watchedFolders: [])
+        try expectEqual(waitingSnap.state, .needsInput)
+        try expectEqual(waitingSnap.interactionReason, "Freigabe nötig")
+
+        // When approval_mode = 'never', do not classify stale exec as waiting for approval
+        try execSQL(at: dbURL, sql: "UPDATE threads SET approval_mode = 'never' WHERE id = 't-wait';")
+        let nonApprovalSnap = CodexReader.read(rawPath: codexDir.path, watchedFolders: [])
+        try expectEqual(nonApprovalSnap.state, .idle)
+    }
+
+    static func testAntigravityWaitingStepDetection(tempRoot: URL) throws {
+        let agDir = tempRoot.appendingPathComponent("ag-waiting")
+        let convDir = agDir.appendingPathComponent("conversations")
+        try FileManager.default.createDirectory(at: convDir, withIntermediateDirectories: true)
+
+        let dbURL = agDir.appendingPathComponent("conversation_summaries.db")
+        try execSQL(
+            at: dbURL,
+            sql: """
+            CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                workspace_uris TEXT NOT NULL,
+                status TEXT NOT NULL,
+                step_count INTEGER NOT NULL,
+                not_fully_idle INTEGER NOT NULL,
+                killed INTEGER NOT NULL,
+                last_modified_time TEXT NOT NULL
+            );
+            INSERT INTO conversation_summaries
+            VALUES ('conv-wait', 'Approval', '["file:///tmp/orbit-proj"]', 'CASCADE_RUN_STATUS_RUNNING', 8, 1, 0, '2026-11-16 21:00:00.000000+00:00');
+            """
+        )
+
+        let convDB = convDir.appendingPathComponent("conv-wait.db")
+        try execSQL(
+            at: convDB,
+            sql: """
+            CREATE TABLE steps (idx INTEGER PRIMARY KEY, step_type INTEGER, status INTEGER);
+            INSERT INTO steps VALUES (1, 132, 3), (2, 132, 9);
+            """
+        )
+
+        let waiting = AntigravityReader.read(rawPath: agDir.path, watchedFolders: [], modelAliases: [:])
+        try expectEqual(waiting.state, .needsInput)
+        try expectEqual(waiting.interactionReason, "Freigabe / Eingabe")
+
+        try execSQL(at: convDB, sql: "UPDATE steps SET status = 2 WHERE idx = 2;")
+        let running = AntigravityReader.read(rawPath: agDir.path, watchedFolders: [], modelAliases: [:])
+        try expectEqual(running.state, .running)
+    }
+
+    static func testNeedsInputTransitionDetection(tempRoot: URL) throws {
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let running = AgentSnapshot(
+            kind: .codex,
+            sessionID: "s-wait",
+            state: .running,
+            projectName: "AgentOrbit",
+            projectPath: nil,
+            gitBranch: nil,
+            modelName: "gpt-5",
+            reasoningEffort: nil,
+            sessionTitle: nil,
+            usage: UsageMetrics(),
+            lastUpdated: t0,
+            activeSince: t0,
+            resolvedSourcePath: nil,
+            statusMessage: nil
+        )
+        var waiting = running
+        waiting.state = .needsInput
+        waiting.interactionReason = "Freigabe nötig"
+
+        let events = CoordinatorMonitor.detectNeedsInputSessions(previous: [running], current: [waiting], now: t0.addingTimeInterval(15))
+        try expectEqual(events.count, 1)
+        try expectEqual(events.first?.reason, "Freigabe nötig")
+
+        // Staying in .needsInput does not re-emit
+        let repeated = CoordinatorMonitor.detectNeedsInputSessions(previous: [waiting], current: [waiting], now: t0.addingTimeInterval(20))
+        try expectTrue(repeated.isEmpty)
+
+        // Transitioning .running -> .needsInput does NOT fire completion notification
+        let completed = CoordinatorMonitor.detectCompletedSessions(
+            previous: [running],
+            current: [waiting],
+            activeStartTimes: [running.id: t0],
+            now: t0.addingTimeInterval(15)
+        )
+        try expectTrue(completed.isEmpty)
     }
 
     private static func execSQL(at url: URL, sql: String) throws {
