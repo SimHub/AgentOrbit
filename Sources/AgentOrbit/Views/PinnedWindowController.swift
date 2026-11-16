@@ -172,8 +172,9 @@ final class PinnedWindowController {
 
     func beginResize(fromTrailingEdge: Bool) {
         guard let panel else { return }
-        // Lock the opposite edge while the user drags a corner grip
+        // Lock the top edge and opposite horizontal edge while dragging a bottom corner grip
         horizontalAnchor = fromTrailingEdge ? .leading : .trailing
+        verticalAnchor = .top
         anchoredMinX = panel.frame.minX
         anchoredMaxX = panel.frame.maxX
         anchoredMinY = panel.frame.minY

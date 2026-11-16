@@ -61,9 +61,11 @@ struct SettingsView: View {
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                     }
-                } else if uiState.settingsTab == .display, let w = uiState.customPinnedWidth {
-                    Button("Auto-Breite (\(Int(w)) pt)") {
+                } else if uiState.settingsTab == .display,
+                          (uiState.customPinnedWidth != nil || uiState.customPinnedMaxHeight != nil) {
+                    Button("Auto-Größe zurücksetzen") {
                         uiState.customPinnedWidth = nil
+                        uiState.customPinnedMaxHeight = nil
                     }
                     .font(.system(size: 10.5))
                 }

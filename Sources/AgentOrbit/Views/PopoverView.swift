@@ -7,6 +7,7 @@ final class PopoverUIState: ObservableObject {
     private static let pinnedKey = "AgentOrbit.IsPinned"
     private static let legacyPinnedKey = "AgentKoordinator.IsPinned"
     private static let pinnedWidthKey = "AgentOrbit.PinnedWidth"
+    private static let pinnedMaxHeightKey = "AgentOrbit.PinnedMaxHeight"
 
     @Published var isPinned: Bool {
         didSet {
@@ -22,6 +23,16 @@ final class PopoverUIState: ObservableObject {
             }
         }
     }
+    @Published var customPinnedMaxHeight: CGFloat? {
+        didSet {
+            if let customPinnedMaxHeight {
+                UserDefaults.standard.set(Double(customPinnedMaxHeight), forKey: Self.pinnedMaxHeightKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.pinnedMaxHeightKey)
+            }
+        }
+    }
+    @Published var measuredCardsHeight: CGFloat = 0
     @Published var showingSettings = false
     @Published var settingsTab: SettingsTab = .display
     @Published var newFolderPath = ""
@@ -36,6 +47,8 @@ final class PopoverUIState: ObservableObject {
     @Published var discoveryStatusMessage: String?
     var resizeStartMouseX: CGFloat?
     var resizeStartWidth: CGFloat?
+    var resizeStartMouseY: CGFloat?
+    var resizeStartHeight: CGFloat?
 
     func toggleUsageDetails(_ id: String) {
         if expandedUsageIDs.contains(id) {
@@ -57,6 +70,19 @@ final class PopoverUIState: ObservableObject {
         } else {
             self.customPinnedWidth = nil
         }
+        if UserDefaults.standard.object(forKey: Self.pinnedMaxHeightKey) != nil {
+            let savedH = CGFloat(UserDefaults.standard.double(forKey: Self.pinnedMaxHeightKey))
+            self.customPinnedMaxHeight = savedH >= 90 ? savedH : nil
+        } else {
+            self.customPinnedMaxHeight = nil
+        }
+    }
+}
+
+private struct CardsContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
@@ -118,8 +144,16 @@ struct PopoverView: View {
                         isHighlighted: PinnedWindowController.shared.prefersLeadingResizeGrip,
                         currentWidth: panelWidth,
                         maxWidth: maxSafePanelWidth,
-                        onWidthChange: { uiState.customPinnedWidth = $0 },
-                        onReset: { uiState.customPinnedWidth = nil }
+                        currentScrollHeight: currentVisibleCardsHeight,
+                        maxScrollHeightLimit: maxAllowedScrollHeight,
+                        onSizeChange: { w, h in
+                            uiState.customPinnedWidth = w
+                            uiState.customPinnedMaxHeight = h
+                        },
+                        onReset: {
+                            uiState.customPinnedWidth = nil
+                            uiState.customPinnedMaxHeight = nil
+                        }
                     )
                     Spacer()
                     ResizeCornerGrip(
@@ -128,8 +162,16 @@ struct PopoverView: View {
                         isHighlighted: !PinnedWindowController.shared.prefersLeadingResizeGrip,
                         currentWidth: panelWidth,
                         maxWidth: maxSafePanelWidth,
-                        onWidthChange: { uiState.customPinnedWidth = $0 },
-                        onReset: { uiState.customPinnedWidth = nil }
+                        currentScrollHeight: currentVisibleCardsHeight,
+                        maxScrollHeightLimit: maxAllowedScrollHeight,
+                        onSizeChange: { w, h in
+                            uiState.customPinnedWidth = w
+                            uiState.customPinnedMaxHeight = h
+                        },
+                        onReset: {
+                            uiState.customPinnedWidth = nil
+                            uiState.customPinnedMaxHeight = nil
+                        }
                     )
                 }
             }
@@ -204,8 +246,22 @@ struct PopoverView: View {
         return monitor.config.viewMode
     }
 
+    private var maxAllowedScrollHeight: CGFloat {
+        max(160, availableScreenSize.height - 170)
+    }
+
     private var maxScrollHeight: CGFloat {
-        min(540, max(260, availableScreenSize.height - 170))
+        if isInPinnedPanel, let customH = uiState.customPinnedMaxHeight {
+            return min(max(90, customH), maxAllowedScrollHeight)
+        }
+        return min(540, max(260, availableScreenSize.height - 170))
+    }
+
+    private var currentVisibleCardsHeight: CGFloat {
+        if uiState.measuredCardsHeight > 0 {
+            return min(uiState.measuredCardsHeight, maxScrollHeight)
+        }
+        return maxScrollHeight
     }
 
     private var header: some View {
@@ -381,13 +437,18 @@ struct PopoverView: View {
                 }
             }
 
-            if snapshots.count > 4 || (effectiveViewMode == .minimal && snapshots.count > 6) {
+            let shouldScroll = (uiState.measuredCardsHeight > maxScrollHeight)
+                || snapshots.count > 4
+                || (effectiveViewMode == .minimal && snapshots.count > 6)
+
+            if shouldScroll {
                 ScrollView(.vertical, showsIndicators: true) {
-                    cardsGrid(snapshots)
+                    measuredCardsContent(snapshots)
                 }
-                .frame(maxHeight: maxScrollHeight)
+                .frame(height: uiState.measuredCardsHeight > 0 ? min(uiState.measuredCardsHeight, maxScrollHeight) : nil)
+                .frame(maxHeight: uiState.measuredCardsHeight > 0 ? nil : maxScrollHeight)
             } else {
-                cardsGrid(snapshots)
+                measuredCardsContent(snapshots)
             }
 
             if effectiveViewMode != .minimal && !monitor.watchedFolders.isEmpty {
@@ -395,6 +456,21 @@ struct PopoverView: View {
             }
         }
         .padding(effectiveViewMode == .minimal ? 9 : 12)
+        .onPreferenceChange(CardsContentHeightKey.self) { height in
+            if height > 0, abs(uiState.measuredCardsHeight - height) > 0.5 {
+                uiState.measuredCardsHeight = height
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func measuredCardsContent(_ snapshots: [AgentSnapshot]) -> some View {
+        cardsGrid(snapshots)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: CardsContentHeightKey.self, value: proxy.size.height)
+                }
+            )
     }
 
     @ViewBuilder
@@ -505,7 +581,9 @@ private struct ResizeCornerGrip: View {
     let isHighlighted: Bool
     let currentWidth: CGFloat
     let maxWidth: CGFloat
-    let onWidthChange: (CGFloat) -> Void
+    let currentScrollHeight: CGFloat
+    let maxScrollHeightLimit: CGFloat
+    let onSizeChange: (CGFloat, CGFloat?) -> Void
     let onReset: () -> Void
 
     private var isHovered: Bool {
@@ -528,7 +606,12 @@ private struct ResizeCornerGrip: View {
         .onHover { hovering in
             uiState.hoveredResizeTrailing = hovering ? isTrailing : (uiState.hoveredResizeTrailing == isTrailing ? nil : uiState.hoveredResizeTrailing)
             if hovering {
-                NSCursor.resizeLeftRight.push()
+                if #available(macOS 15.0, *) {
+                    let position: NSCursor.FrameResizePosition = isTrailing ? .bottomRight : .bottomLeft
+                    NSCursor.frameResize(position: position, directions: .all).push()
+                } else {
+                    NSCursor.crosshair.push()
+                }
             } else {
                 NSCursor.pop()
             }
@@ -539,24 +622,41 @@ private struct ResizeCornerGrip: View {
         .gesture(
             DragGesture(minimumDistance: 1)
                 .onChanged { _ in
-                    let mouseX = NSEvent.mouseLocation.x
+                    let mouse = NSEvent.mouseLocation
                     if uiState.resizeStartMouseX == nil {
-                        uiState.resizeStartMouseX = mouseX
+                        uiState.resizeStartMouseX = mouse.x
                         uiState.resizeStartWidth = currentWidth
+                        uiState.resizeStartMouseY = mouse.y
+                        uiState.resizeStartHeight = currentScrollHeight
                         PinnedWindowController.shared.beginResize(fromTrailingEdge: isTrailing)
                     }
-                    guard let sMouse = uiState.resizeStartMouseX, let sWidth = uiState.resizeStartWidth else { return }
-                    let delta = isTrailing ? (mouseX - sMouse) : (sMouse - mouseX)
-                    let clamped = min(max(240, sWidth + delta), maxWidth).rounded()
-                    onWidthChange(clamped)
+                    guard
+                        let sMouseX = uiState.resizeStartMouseX,
+                        let sWidth = uiState.resizeStartWidth,
+                        let sMouseY = uiState.resizeStartMouseY,
+                        let sHeight = uiState.resizeStartHeight
+                    else { return }
+
+                    let deltaX = isTrailing ? (mouse.x - sMouseX) : (sMouseX - mouse.x)
+                    let clampedW = min(max(240, sWidth + deltaX), maxWidth).rounded()
+
+                    let deltaY = sMouseY - mouse.y
+                    let nextHeight: CGFloat? = if uiState.customPinnedMaxHeight != nil || abs(deltaY) >= 6 {
+                        min(max(90, sHeight + deltaY), maxScrollHeightLimit).rounded()
+                    } else {
+                        nil
+                    }
+                    onSizeChange(clampedW, nextHeight)
                 }
                 .onEnded { _ in
                     uiState.resizeStartMouseX = nil
                     uiState.resizeStartWidth = nil
+                    uiState.resizeStartMouseY = nil
+                    uiState.resizeStartHeight = nil
                     PinnedWindowController.shared.endResize()
                 }
         )
-        .help("Ziehen zum Skalieren · Doppelklick = Auto-Breite")
+        .help("Ziehen: Breite & max. Listen-Höhe · Doppelklick = Auto-Größe")
     }
 }
 

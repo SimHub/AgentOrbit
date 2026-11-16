@@ -8,7 +8,7 @@ Schlanke macOS-Menüleisten- & Desktop-HUD-App (Swift 6 / SwiftUI, ohne Xcode, ~
 
 ## Aktuelle Architektur & Features (relevant für Weiterentwicklung)
 
-- **Multi-Projekt & Layout:** `CoordinatorMonitor` sammelt alle laufenden + aktuellen Sessions (24h). `PopoverView` skaliert responsiv (1–3 Spalten, `240–980 pt` ziehbar) mit den Stufen `Minimal`, `Kompakt`, `Detail`. `.needsInput` (`Eingabe nötig`) sortiert vor `.running` (`Aktiv`) und `.idle`.
+- **Multi-Projekt & Layout:** `CoordinatorMonitor` sammelt alle laufenden + aktuellen Sessions (24h). `PopoverView` skaliert responsiv in 2D (`customPinnedWidth` `240 pt`–Bildschirmbreite, 1–3 Spalten, sowie `customPinnedMaxHeight` als flexibler Scroll-Deckel ab `90 pt` bis Monitorhöhe; Stufen `Minimal`, `Kompakt`, `Detail`). `.needsInput` (`Eingabe nötig`) sortiert vor `.running` (`Aktiv`) und `.idle`.
 - **Desktop-HUD & Snap-Grid:** `PinnedWindowController` nutzt `DragGesture` (nicht `isMovableByWindowBackground`, da WindowServer Events schluckt) + `GridSnapCalculator` (`24 pt`-Grid, 9 Anker, `⌥` = frei) und `hudOpacity`.
 - **Reader-Besonderheiten (Interaktion / Status):**
   - Antigravity: `conversations/<id>.db` → `steps.status == 9` signalisiert `WAITING` (während `conversation_summaries.db` `CASCADE_RUN_STATUS_RUNNING` / `not_fully_idle=1` hält).
