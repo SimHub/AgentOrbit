@@ -228,7 +228,14 @@ try icns.write(to: outURL)
 SWIFT
 
 BUNDLE_ID="${AGENTORBIT_BUNDLE_ID:-dev.agentorbit.AgentOrbit}"
-APP_VERSION="${AGENTORBIT_VERSION:-1.0.0}"
+DEFAULT_VERSION="1.1.0"
+if git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  GIT_TAG="$(git -C "$PROJECT_DIR" describe --tags --abbrev=0 2>/dev/null || true)"
+  if [[ -n "$GIT_TAG" ]]; then
+    DEFAULT_VERSION="${GIT_TAG#v}"
+  fi
+fi
+APP_VERSION="${AGENTORBIT_VERSION:-$DEFAULT_VERSION}"
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

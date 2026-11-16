@@ -221,6 +221,7 @@ struct PopoverView: View {
                 Text("AgentOrbit")
                     .font(.system(size: isUltraNarrow ? 11.5 : 12.5, weight: .semibold))
                     .lineLimit(1)
+                    .help("AgentOrbit v\(AppMetadata.version)")
                 if !isUltraNarrow {
                     Text(subtitleText)
                         .font(.system(size: 10))

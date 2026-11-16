@@ -74,6 +74,25 @@ struct SettingsView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
             }
+
+            HStack(spacing: 6) {
+                Text("AgentOrbit v\(AppMetadata.version)")
+                    .foregroundStyle(.tertiary)
+
+                Spacer()
+
+                if let repoURL = URL(string: "https://github.com/SimHub/AgentOrbit") {
+                    Link("GitHub", destination: repoURL)
+                        .foregroundStyle(.secondary)
+                }
+                Text("·")
+                    .foregroundStyle(.tertiary)
+                if let releasesURL = URL(string: "https://github.com/SimHub/AgentOrbit/releases") {
+                    Link("Releases", destination: releasesURL)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 10))
         }
         .padding(12)
     }
