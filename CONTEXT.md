@@ -5,6 +5,7 @@ Schlanke macOS-Menüleisten- & Desktop-HUD-App (Swift 6 / SwiftUI, ohne Xcode, ~
 ## Arbeitsregel
 
 - **Nach jedem Task `CONTEXT.md` kurz prüfen und nur festhalten, was für die weitere Arbeit relevant ist** (Architektur, Build/Frameworks, Fallstricke – kein Changelog).
+- **Nach einem Release-Tag oder Code-Update immer aktiv fragen**, ob zum lokalen Versions-Abgleich `./scripts/install.sh --from-source --open` (aktualisiert `/Applications/AgentOrbit.app` auf die aktuelle Tag-Version) und/oder `./scripts/build_app.sh --universal --dmg` ausgeführt werden sollen.
 
 ## Aktuelle Architektur & Features (relevant für Weiterentwicklung)
 
@@ -36,6 +37,7 @@ Schlanke macOS-Menüleisten- & Desktop-HUD-App (Swift 6 / SwiftUI, ohne Xcode, ~
 ./scripts/run_tests.sh
 ./scripts/build_app.sh                     # Single-Arch App (schnell, klein)
 ./scripts/build_app.sh --universal --dmg   # Universal (arm64 + x86_64) + dist/AgentOrbit.dmg
+./scripts/install.sh --from-source --open  # Tests + Build + Installation nach /Applications + Start
 open ./dist/AgentOrbit.app
 ```
 
