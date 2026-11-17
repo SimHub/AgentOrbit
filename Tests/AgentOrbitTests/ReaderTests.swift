@@ -46,7 +46,8 @@ struct ReaderTestRunner {
             ("testCostEstimator", testCostEstimator),
             ("testCodexNeedsInputDetection", testCodexNeedsInputDetection),
             ("testAntigravityWaitingStepDetection", testAntigravityWaitingStepDetection),
-            ("testNeedsInputTransitionDetection", testNeedsInputTransitionDetection)
+            ("testNeedsInputTransitionDetection", testNeedsInputTransitionDetection),
+            ("testOpenCodeV2SessionDetection", testOpenCodeV2SessionDetection)
         ]
 
         var passed = 0
@@ -592,6 +593,99 @@ struct ReaderTestRunner {
             now: t0.addingTimeInterval(15)
         )
         try expectTrue(completed.isEmpty)
+    }
+
+    static func testOpenCodeV2SessionDetection(tempRoot: URL) throws {
+        let ocDir = tempRoot.appendingPathComponent("opencode")
+        try FileManager.default.createDirectory(at: ocDir, withIntermediateDirectories: true)
+        let dbURL = ocDir.appendingPathComponent("opencode.db")
+
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let oldMs = nowMs - 1_800_000 // 30 minutes ago
+        let busyMs = nowMs - 45_000   // busy started 45s ago (beyond old 20s age heuristic)
+
+        try execSQL(
+            at: dbURL,
+            sql: """
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY,
+                directory TEXT,
+                title TEXT,
+                model TEXT,
+                agent TEXT,
+                cost REAL,
+                tokens_input INTEGER,
+                tokens_output INTEGER,
+                tokens_cache_read INTEGER,
+                time_updated INTEGER,
+                time_archived INTEGER
+            );
+            INSERT INTO session VALUES (
+                'ses_oc1', '/tmp/oc-proj', 'Old Row',
+                '{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"}',
+                'build', 0.0, 100, 50, 0, \(oldMs), NULL
+            );
+
+            CREATE TABLE session_v2 (
+                id TEXT PRIMARY KEY,
+                directory TEXT,
+                title TEXT,
+                model TEXT,
+                agent TEXT,
+                cost REAL,
+                tokens_input INTEGER,
+                tokens_output INTEGER,
+                tokens_cache_read INTEGER,
+                time_updated INTEGER,
+                time_archived INTEGER,
+                time_busy INTEGER,
+                time_idle INTEGER,
+                time_suspended INTEGER,
+                idle_outcome TEXT
+            );
+            INSERT INTO session_v2 VALUES (
+                'ses_oc1', '/tmp/oc-proj', 'Active v2',
+                '{"id":"deepseek-v4.1-flash-free","providerID":"opencode","variant":"default"}',
+                'build', 0.0, 2000, 400, 1000, \(busyMs), NULL, \(busyMs), \(oldMs), NULL, 'succeeded'
+            );
+
+            CREATE TABLE session_message (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                type TEXT,
+                seq INTEGER,
+                time_created INTEGER,
+                time_updated INTEGER,
+                data TEXT
+            );
+            """
+        )
+
+        let cfg = CustomAgentConfig(name: "OpenCode", path: ocDir.path, isEnabled: true)
+        let runningSnap = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
+        try expectEqual(runningSnap?.state, .running)
+        try expectEqual(runningSnap?.modelName, "deepseek-v4.1-flash-free")
+        try expectEqual(runningSnap?.reasoningEffort, nil)
+
+        // Open question tool in session_message transitions to .needsInput
+        try execSQL(
+            at: dbURL,
+            sql: """
+            INSERT INTO session_message VALUES (
+                'msg_q', 'ses_oc1', 'assistant', 10, \(busyMs), \(busyMs),
+                '{"content":[{"type":"tool","name":"question","id":"call_q1"}],"finish":"tool-calls"}'
+            );
+            """
+        )
+        let waitingSnap = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
+        try expectEqual(waitingSnap?.state, .needsInput)
+        try expectEqual(waitingSnap?.interactionReason, "Rückfrage")
+
+        // When time_idle catches up to time_busy, transitions to .idle
+        let doneMs = nowMs
+        try execSQL(at: dbURL, sql: "UPDATE session_v2 SET time_idle = \(doneMs), time_updated = \(doneMs) WHERE id = 'ses_oc1';")
+        let idleSnap = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
+        try expectEqual(idleSnap?.state, .idle)
     }
 
     private static func execSQL(at url: URL, sql: String) throws {

@@ -85,17 +85,42 @@ enum CustomAgentReader {
         limit: Int
     ) -> [AgentSnapshot] {
         let fetchCount = max(limit * 2, 12)
+        let tables = Set(
+            SQLiteReader.query(
+                databaseURL: dbURL,
+                sql: "SELECT name FROM sqlite_master WHERE type='table'"
+            ).compactMap { $0["name"]?.stringValue }
+        )
+
+        let useV2 = tables.contains("session_v2")
+        let tableName = useV2 ? "session_v2" : "session"
+        let columns = Set(
+            SQLiteReader.query(databaseURL: dbURL, sql: "PRAGMA table_info(\(tableName))")
+                .compactMap { $0["name"]?.stringValue }
+        )
+        guard columns.contains("id"), columns.contains("time_updated") else { return [] }
+
+        var selectFields = ["id", "directory", "title", "model", "agent", "cost", "tokens_input", "tokens_output", "tokens_cache_read", "time_updated"]
+            .filter { columns.contains($0) }
+        if useV2 {
+            for col in ["time_busy", "time_idle", "time_suspended", "idle_outcome"] where columns.contains(col) {
+                selectFields.append(col)
+            }
+        }
+        let whereClause = columns.contains("time_archived") ? "WHERE time_archived IS NULL" : ""
         let rows = SQLiteReader.query(
             databaseURL: dbURL,
             sql: """
-            SELECT id, directory, title, model, agent, cost, tokens_input, tokens_output, tokens_cache_read, time_updated
-            FROM session
-            WHERE time_archived IS NULL
+            SELECT \(selectFields.joined(separator: ", "))
+            FROM \(tableName)
+            \(whereClause)
             ORDER BY time_updated DESC
             LIMIT \(fetchCount)
             """
         )
 
+        let hasSessionMessage = tables.contains("session_message")
+        let hasLegacyMessage = tables.contains("message")
         var results: [AgentSnapshot] = []
         var seenProjects: Set<String> = []
 
@@ -103,14 +128,28 @@ enum CustomAgentReader {
             let sid = row["id"]?.stringValue ?? "\(config.id.uuidString)-\(index)"
             let directory = row["directory"]?.stringValue
             let title = row["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
-            let model = row["model"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 } ?? "—"
-            let rawTime = row["time_updated"]?.doubleValue
-            let updatedAt = rawTime.map { val in
-                // OpenCode stores Unix timestamps in milliseconds
-                val > 10_000_000_000 ? Date(timeIntervalSince1970: val / 1000.0) : Date(timeIntervalSince1970: val)
-            }
-            let age = updatedAt.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
-            let state: AgentRunState = age < 20 ? .running : .idle
+            let parsedModel = parseOpenCodeModel(row["model"]?.stringValue)
+
+            let updatedAt = decodeOpenCodeEpoch(row["time_updated"]?.doubleValue)
+            let busyAt = decodeOpenCodeEpoch(row["time_busy"]?.doubleValue)
+            let idleAt = decodeOpenCodeEpoch(row["time_idle"]?.doubleValue)
+            let suspendedAt = decodeOpenCodeEpoch(row["time_suspended"]?.doubleValue)
+
+            let newestDate = [updatedAt, busyAt, idleAt, suspendedAt].compactMap { $0 }.max()
+            let age = newestDate.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
+
+            let (state, interactionReason) = resolveOpenCodeState(
+                dbURL: dbURL,
+                sessionID: sid,
+                useV2: useV2,
+                hasSessionMessage: hasSessionMessage,
+                hasLegacyMessage: hasLegacyMessage,
+                updatedAt: updatedAt,
+                busyAt: busyAt,
+                idleAt: idleAt,
+                suspendedAt: suspendedAt,
+                age: age
+            )
 
             let projectKey = directory ?? sid
             if !state.isActiveOrWaiting && !results.isEmpty {
@@ -134,6 +173,12 @@ enum CustomAgentReader {
                 recordedCostUSD: (costVal ?? 0) > 0 ? costVal : nil
             )
 
+            let snapshotLastUpdated: Date? = if state == .running, let busyAt, (idleAt == nil || busyAt > idleAt!) {
+                max(busyAt, updatedAt ?? busyAt)
+            } else {
+                newestDate
+            }
+
             results.append(AgentSnapshot(
                 kind: .custom,
                 sessionID: "\(config.id.uuidString):\(sid)",
@@ -142,13 +187,14 @@ enum CustomAgentReader {
                 projectName: PathResolver.projectDisplayName(for: directory, watchedFolders: watchedFolders),
                 projectPath: directory,
                 gitBranch: PathResolver.gitBranch(for: directory),
-                modelName: model,
-                reasoningEffort: nil,
+                modelName: parsedModel.model,
+                reasoningEffort: parsedModel.effort,
                 sessionTitle: title,
                 usage: usage,
-                lastUpdated: updatedAt,
+                lastUpdated: snapshotLastUpdated,
                 resolvedSourcePath: dbURL.deletingLastPathComponent().path,
-                statusMessage: nil
+                statusMessage: nil,
+                interactionReason: interactionReason
             ))
 
             if results.count >= limit {
@@ -157,6 +203,104 @@ enum CustomAgentReader {
         }
 
         return results
+    }
+
+    private static func decodeOpenCodeEpoch(_ rawTime: Double?) -> Date? {
+        guard let rawTime, rawTime > 0 else { return nil }
+        // OpenCode stores Unix timestamps in milliseconds
+        return rawTime > 10_000_000_000
+            ? Date(timeIntervalSince1970: rawTime / 1000.0)
+            : Date(timeIntervalSince1970: rawTime)
+    }
+
+    private static func parseOpenCodeModel(_ raw: String?) -> (model: String, effort: String?) {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return ("—", nil)
+        }
+        if trimmed.hasPrefix("{"),
+           let data = trimmed.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let id = (json["id"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !id.isEmpty {
+            let variant = (json["variant"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let effort = (variant?.isEmpty == false && variant?.lowercased() != "default") ? variant : nil
+            return (id, effort)
+        }
+        return (trimmed, nil)
+    }
+
+    private static func resolveOpenCodeState(
+        dbURL: URL,
+        sessionID: String,
+        useV2: Bool,
+        hasSessionMessage: Bool,
+        hasLegacyMessage: Bool,
+        updatedAt: Date?,
+        busyAt: Date?,
+        idleAt: Date?,
+        suspendedAt: Date?,
+        age: TimeInterval
+    ) -> (AgentRunState, String?) {
+        let escapedSID = sessionID.replacingOccurrences(of: "'", with: "''")
+
+        if useV2 {
+            // Check explicit suspension (e.g. awaiting input/resume) after latest idle
+            if let suspendedAt, (idleAt == nil || suspendedAt > idleAt!), age < 86_400 {
+                return (.needsInput, "Pausiert / Eingabe")
+            }
+
+            let isBusy = if let busyAt {
+                idleAt == nil || busyAt > idleAt!
+            } else {
+                false
+            }
+
+            if isBusy {
+                if hasSessionMessage {
+                    let msgRows = SQLiteReader.query(
+                        databaseURL: dbURL,
+                        sql: "SELECT type, data FROM session_message WHERE session_id = '\(escapedSID)' ORDER BY seq DESC LIMIT 1"
+                    )
+                    if let latestMsg = msgRows.first,
+                       latestMsg["type"]?.stringValue == "assistant",
+                       let dataStr = latestMsg["data"]?.stringValue,
+                       let data = dataStr.data(using: .utf8),
+                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let content = json["content"] as? [[String: Any]] {
+                        let hasQuestionTool = content.contains { item in
+                            (item["type"] as? String) == "tool"
+                                && ((item["name"] as? String) == "question" || (item["name"] as? String) == "ask_user")
+                        }
+                        if hasQuestionTool {
+                            return (.needsInput, "Rückfrage")
+                        }
+                    }
+                }
+                // Guard against stale orphan busy rows older than 6 hours without updates
+                if age < 21_600 {
+                    return (.running, nil)
+                }
+            }
+            return (.idle, nil)
+        }
+
+        // Legacy OpenCode v1 schema fallback: inspect latest message completion + timestamp
+        if hasLegacyMessage, age < 600 {
+            let msgRows = SQLiteReader.query(
+                databaseURL: dbURL,
+                sql: "SELECT data FROM message WHERE session_id = '\(escapedSID)' ORDER BY time_updated DESC LIMIT 1"
+            )
+            if let dataStr = msgRows.first?["data"]?.stringValue,
+               let data = dataStr.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               (json["role"] as? String) == "assistant",
+               let timeObj = json["time"] as? [String: Any],
+               timeObj["completed"] == nil {
+                return (.running, nil)
+            }
+        }
+
+        return (age < 20 ? .running : .idle, nil)
     }
 
     private static func readRecentJSONLSessions(
