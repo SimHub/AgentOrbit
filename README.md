@@ -12,7 +12,7 @@
   <a href="https://buymeacoffee.com/simhub"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-simhub-FFDD00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required) macOS menu bar & floating desktop HUD for AI coding agents — reading live status, projects, Git branches, models, runtime, and usage metrics locally from **Codex**, **Antigravity**, and optional custom agents (**OpenCode**, **Pi**, **Claude**, etc.).
+A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required) macOS menu bar & floating desktop HUD for AI coding agents — reading live status, projects, Git branches, models, runtime, and usage metrics locally from **Codex**, **Antigravity**, **LM Studio Bionic**, **OpenCode**, and optional custom agents (**Pi**, **Claude**, etc.).
 
 - **Project Page:** https://simhub.github.io/AgentOrbit/
 - **Download Latest DMG:** https://github.com/SimHub/AgentOrbit/releases/latest/download/AgentOrbit.dmg
@@ -25,20 +25,20 @@ A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required
 - **Responsive Desktop HUD & Snap-Grid:**
   - Pin as an always-on-top desktop widget (`⌃⌥ O` global hotkey, adjustable opacity `45%–100%`).
   - Drag freely with a live `24 pt` snap grid + 9 screen anchors (hold `⌥` for free placement).
-  - Resize from `240 pt` up to full screen width with automatic 1–3 column wrapping.
+  - Resize in 2D (`240 pt` up to full screen width, 1–3 columns, plus adjustable max list height).
 - **3 View Densities:** `Minimal` (2-line corner widget, auto-enabled `< 290 pt`), `Kompakt`, and `Detail` (permanent usage & circular `Weekly` / `5h` rate-limit rings + reset timers).
 - **1-Click Project Launcher:** Open any active project directly in **Antigravity**, **VS Code**, **Cursor**, **Terminal** (Ghostty/Warp/iTerm/Terminal), or **Finder** (plus right-click context menu).
-- **Needs-Input & Completion Notifications:** Detects when Codex or Antigravity pauses for user approval or a question (`Eingabe nötig` orange menu bar & HUD badge) and sends native macOS notifications (+ optional sound) for both interaction requests and `Aktiv → Idle` completion.
+- **Needs-Input & Completion Notifications:** Detects when Codex, Antigravity, OpenCode, or LM Studio Bionic pauses for user approval or a question (`Eingabe nötig` orange menu bar & HUD badge) and sends native macOS notifications (+ optional sound) for both interaction requests and `Aktiv → Idle` completion.
 - **Zero-Config & Optional Cost Estimate:** Auto-discovers installed agent directories on first launch, supports Launch at Login (`SMAppService`), and optionally displays exact/estimated session costs (`~$0.xx`).
 - **Read-Only & Symlink-Safe:** Resolves symlinks (`resolvingSymlinksInPath`) for reliable `FSEvents` even on external SSDs and reads SQLite databases strictly read-only.
 
 ## Funktionen (DE)
 
 - **Multi-Projekt-Übersicht:** Zeigt alle parallelen und aktuellen Sessions mit Projekt, Live-Git-Branch, Modell + Stärke, Laufzeit-Timer und Menüleisten-Counter.
-- **Desktop-HUD mit Einrast-Grid:** Anpinnbar (`⌃⌥ O`), stufenlos zieh- und skalierbar (`240 pt` bis Bildschirmbreite, 1–3 Spalten) mit `24 pt`-Raster & 9 Bildschirm-Ankern (`⌥` = frei platzieren) sowie einstellbarer Deckkraft.
+- **Desktop-HUD mit Einrast-Grid:** Anpinnbar (`⌃⌥ O`), stufenlos in Breite & Max-Höhe skalierbar (`240 pt` bis Bildschirmbreite, 1–3 Spalten) mit `24 pt`-Raster & 9 Bildschirm-Ankern (`⌥` = frei platzieren) sowie einstellbarer Deckkraft.
 - **3 Ansichts-Stufen:** `Minimal`, `Kompakt`, `Detail` (inkl. runder `Weekly`/`5h`-Limit-Ringe und optionaler `~$`-Kosten-Schätzung).
 - **1-Klick-IDE-Starter, Wartet- & Fertig-Meldung:** Zeigt per orangem Badge + Mitteilung, sobald ein Agent auf deine Freigabe/Rückfrage wartet (`Eingabe nötig`) oder mit `Aktiv → Idle` fertig ist, und öffnet Projekte direkt im passenden Editor/Terminal.
-- **Zero-Config & Erweiterbar:** Auto-Discovery beim Erststart, „Bei Anmeldung starten“ und flexibel hinzufügbare Agents (`OpenCode`, `Pi`, `Claude`, eigene Ordner).
+- **Zero-Config & Erweiterbar:** Auto-Discovery beim Erststart, „Bei Anmeldung starten“ und flexibel hinzufügbare Agents (`OpenCode`, `LM Studio Bionic`, `Pi`, `Claude`, eigene Ordner).
 
 ---
 

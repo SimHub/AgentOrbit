@@ -46,6 +46,12 @@ public enum AgentDiscovery {
             custom.append(CustomAgentConfig(name: "OpenCode", path: openCodeDir.path, isEnabled: true))
         }
 
+        // LM Studio Bionic (projects/*/project.json + .internal/ng-sessions.sqlite)
+        let bionicDir = homeDirectory.appendingPathComponent(".cache/lm-studio/apps/bionic")
+        if PathResolver.existsDirectory(bionicDir.appendingPathComponent("projects").resolvingSymlinksInPath()) {
+            custom.append(CustomAgentConfig(name: "Bionic", path: bionicDir.path, isEnabled: true))
+        }
+
         // Pi agent
         let piDir = homeDirectory.appendingPathComponent(".pi/agent")
         if PathResolver.existsDirectory(piDir.resolvingSymlinksInPath()) {

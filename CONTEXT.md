@@ -14,6 +14,7 @@ Schlanke macOS-Menüleisten- & Desktop-HUD-App (Swift 6 / SwiftUI, ohne Xcode, ~
   - Antigravity: `conversations/<id>.db` → `steps.status == 9` signalisiert `WAITING` (während `conversation_summaries.db` `CASCADE_RUN_STATUS_RUNNING` / `not_fully_idle=1` hält).
   - Codex: Offener Turn (`task_started` ohne `task_complete`/`turn_aborted`) mit offenem `request_user_input*` oder wartendem `exec`/`exec_command`/`apply_patch` (`age >= 10s`, `approval_mode != 'never'`) → `.needsInput`.
   - OpenCode (`opencode.db`): Neuere Desktop-Versionen nutzen `session_v2` (`time_busy > time_idle` = `.running`, `time_suspended > time_idle` / offenes `question`-Tool in `session_message` = `.needsInput`, `time_idle >= time_busy` = `.idle`) sowie JSON-`model`-Strings; Fallback auf Legacy-`session`/`message` bleibt erhalten.
+  - LM Studio Bionic (`~/.cache/lm-studio/apps/bionic`): `projects/<id>/.internal/ng-sessions.sqlite` (`sessions` mit `parent_session_id IS NULL` + `chat_entries`-Kette ab `committed_head_entry_id`: `elicitationRequest` = `.needsInput`, `forkPoint: assistantTurnEnd`/`interrupted`/`error` = `.idle`, sonst aktiver Turn = `.running`).
 - **System-Integrationen (reine Apple-Frameworks):**
   - `UserNotifications` (`CompletionNotifier`): `Aktiv` → `Idle` (`notifyOnCompletion`, `>= 3s`) sowie `→ Eingabe nötig` (`notifyOnNeedsInput`), erst nach Initial-Refresh.
   - `Carbon` (`HotKeyController`): Globaler Hotkey ohne Accessibility-Rechte (Default `⌃⌥ O`).

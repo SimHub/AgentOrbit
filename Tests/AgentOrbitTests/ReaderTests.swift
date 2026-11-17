@@ -47,7 +47,8 @@ struct ReaderTestRunner {
             ("testCodexNeedsInputDetection", testCodexNeedsInputDetection),
             ("testAntigravityWaitingStepDetection", testAntigravityWaitingStepDetection),
             ("testNeedsInputTransitionDetection", testNeedsInputTransitionDetection),
-            ("testOpenCodeV2SessionDetection", testOpenCodeV2SessionDetection)
+            ("testOpenCodeV2SessionDetection", testOpenCodeV2SessionDetection),
+            ("testLMStudioBionicSessionDetection", testLMStudioBionicSessionDetection)
         ]
 
         var passed = 0
@@ -424,13 +425,14 @@ struct ReaderTestRunner {
         try fm.createDirectory(at: fakeHome.appendingPathComponent(".codex"), withIntermediateDirectories: true)
         try fm.createDirectory(at: fakeHome.appendingPathComponent(".local/share/opencode"), withIntermediateDirectories: true)
         try Data().write(to: fakeHome.appendingPathComponent(".local/share/opencode/opencode.db"))
+        try fm.createDirectory(at: fakeHome.appendingPathComponent(".cache/lm-studio/apps/bionic/projects"), withIntermediateDirectories: true)
         // Empty .claude without projects/sessions should NOT be auto-added
         try fm.createDirectory(at: fakeHome.appendingPathComponent(".claude"), withIntermediateDirectories: true)
 
         let result = AgentDiscovery.discover(homeDirectory: fakeHome)
         try expectTrue(result.hasCodex)
         try expectTrue(!result.hasAntigravity)
-        try expectEqual(result.customAgents.map(\.name), ["OpenCode"])
+        try expectEqual(result.customAgents.map(\.name), ["OpenCode", "Bionic"])
     }
 
     static func testCostEstimator(tempRoot: URL) throws {
@@ -686,6 +688,86 @@ struct ReaderTestRunner {
         try execSQL(at: dbURL, sql: "UPDATE session_v2 SET time_idle = \(doneMs), time_updated = \(doneMs) WHERE id = 'ses_oc1';")
         let idleSnap = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
         try expectEqual(idleSnap?.state, .idle)
+    }
+
+    static func testLMStudioBionicSessionDetection(tempRoot: URL) throws {
+        let bionicRoot = tempRoot.appendingPathComponent("bionic")
+        let projDir = bionicRoot.appendingPathComponent("projects/proj-1")
+        let internalDir = projDir.appendingPathComponent(".internal")
+        try FileManager.default.createDirectory(at: internalDir, withIntermediateDirectories: true)
+
+        try "{\"name\":\"Godot-Games\",\"projectType\":\"regular\"}\n"
+            .write(to: projDir.appendingPathComponent("project.json"), atomically: true, encoding: .utf8)
+
+        let dbURL = internalDir.appendingPathComponent("ng-sessions.sqlite")
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+
+        try execSQL(
+            at: dbURL,
+            sql: """
+            CREATE TABLE chat_entries (
+                id TEXT PRIMARY KEY,
+                previous_id TEXT,
+                entry_json TEXT
+            );
+            CREATE TABLE sessions (
+                session_id TEXT PRIMARY KEY,
+                session_name TEXT,
+                committed_head_entry_id TEXT,
+                session_json TEXT,
+                updated_timestamp INTEGER,
+                parent_session_id TEXT
+            );
+            INSERT INTO chat_entries VALUES
+                ('e1', NULL, '{"type":"message","message":{"role":"user"}}'),
+                ('e2', 'e1', '{"type":"stateChange"}');
+            INSERT INTO sessions VALUES (
+                'b-1',
+                'Bionic Demo',
+                'e2',
+                '{"modelSpecifier":{"type":"indexed","indexedModelIdentifier":"lmstudio-community/Qwen3.5-9B-unsloth-mlx"},"inferenceConfig":{"reasoningLevel":"medium"},"sessionParams":{"working_directory":"/tmp/bionic-game"},"contextEstimation":{"total":17551}}',
+                \(nowMs - 30_000),
+                NULL
+            );
+            INSERT INTO sessions VALUES (
+                'b-sub',
+                'Sub Reviewer',
+                'e2',
+                '{"subSessionType":"shellApprovalReviewer"}',
+                \(nowMs),
+                'b-1'
+            );
+            """
+        )
+
+        let cfg = CustomAgentConfig(name: "Bionic", path: bionicRoot.path, isEnabled: true)
+        let running = CustomAgentReader.readSessions(config: cfg, watchedFolders: [])
+        try expectEqual(running.count, 1)
+        try expectEqual(running.first?.state, .running)
+        try expectEqual(running.first?.projectName, "bionic-game")
+        try expectEqual(running.first?.modelName, "Qwen3.5-9B-unsloth-mlx")
+        try expectEqual(running.first?.reasoningEffort, "medium")
+        try expectEqual(running.first?.usage.sessionTotalTokens, 17551)
+
+        // Child elicitationRequest without head commit yet -> .needsInput
+        try execSQL(
+            at: dbURL,
+            sql: "INSERT INTO chat_entries VALUES ('e3', 'e2', '{\"type\":\"elicitationRequest\"}');"
+        )
+        let waiting = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
+        try expectEqual(waiting?.state, .needsInput)
+        try expectEqual(waiting?.interactionReason, "Rückfrage")
+
+        // forkPoint assistantTurnEnd -> .idle
+        try execSQL(
+            at: dbURL,
+            sql: """
+            INSERT INTO chat_entries VALUES ('e4', 'e3', '{"type":"forkPoint","forkPoint":"assistantTurnEnd"}');
+            UPDATE sessions SET committed_head_entry_id = 'e4' WHERE session_id = 'b-1';
+            """
+        )
+        let idle = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
+        try expectEqual(idle?.state, .idle)
     }
 
     private static func execSQL(at url: URL, sql: String) throws {

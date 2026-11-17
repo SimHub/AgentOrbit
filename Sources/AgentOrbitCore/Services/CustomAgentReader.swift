@@ -40,7 +40,18 @@ enum CustomAgentReader {
             }
         }
 
-        // 2. Generic JSONL sessions (e.g. Pi, Claude Code, etc.)
+        // 2. LM Studio Bionic (projects/*/.internal/ng-sessions.sqlite)
+        if let bionicSessions = readBionicSessions(
+            in: resolvedRoot,
+            config: config,
+            label: label,
+            watchedFolders: watchedFolders,
+            limit: limit
+        ) {
+            return bionicSessions
+        }
+
+        // 3. Generic JSONL sessions (e.g. Pi, Claude Code, etc.)
         if isDir.boolValue {
             let jsonlSessions = readRecentJSONLSessions(
                 in: resolvedRoot,
@@ -54,7 +65,7 @@ enum CustomAgentReader {
             }
         }
 
-        // 3. Generic folder activity fallback
+        // 4. Generic folder activity fallback
         let mtime = newestModificationDate(in: resolvedRoot, maxDepth: 2)
         let isLive = mtime.map { Date().timeIntervalSince($0) < 20 } ?? false
         return [
@@ -301,6 +312,269 @@ enum CustomAgentReader {
         }
 
         return (age < 20 ? .running : .idle, nil)
+    }
+
+    private static func readBionicSessions(
+        in root: URL,
+        config: CustomAgentConfig,
+        label: String,
+        watchedFolders: [WatchedFolderStatus],
+        limit: Int
+    ) -> [AgentSnapshot]? {
+        let fm = FileManager.default
+        var projectSources: [(dbURL: URL, projectNameHint: String?)] = []
+
+        let projectsDir = root.appendingPathComponent("projects")
+        if PathResolver.existsDirectory(projectsDir),
+           let dirs = try? fm.contentsOfDirectory(
+               at: projectsDir,
+               includingPropertiesForKeys: [.isDirectoryKey],
+               options: [.skipsHiddenFiles]
+           ) {
+            for dir in dirs {
+                let dbURL = dir.appendingPathComponent(".internal/ng-sessions.sqlite")
+                if fm.fileExists(atPath: dbURL.path) {
+                    let hint = parseBionicProjectName(at: dir.appendingPathComponent("project.json"))
+                    projectSources.append((dbURL, hint))
+                }
+            }
+        }
+
+        // Also support pointing directly at a Bionic project folder or ng-sessions.sqlite file
+        if projectSources.isEmpty {
+            let candidates = [
+                root.appendingPathComponent(".internal/ng-sessions.sqlite"),
+                root.appendingPathComponent("ng-sessions.sqlite"),
+                root
+            ]
+            for candidate in candidates where candidate.lastPathComponent == "ng-sessions.sqlite" && fm.fileExists(atPath: candidate.path) {
+                let projectDir = candidate.deletingLastPathComponent().lastPathComponent == ".internal"
+                    ? candidate.deletingLastPathComponent().deletingLastPathComponent()
+                    : candidate.deletingLastPathComponent()
+                let hint = parseBionicProjectName(at: projectDir.appendingPathComponent("project.json"))
+                projectSources.append((candidate, hint))
+                break
+            }
+        }
+
+        guard !projectSources.isEmpty else { return nil }
+
+        var allCollected: [AgentSnapshot] = []
+        for source in projectSources {
+            let dbRows = SQLiteReader.query(
+                databaseURL: source.dbURL,
+                sql: "PRAGMA table_info(sessions)"
+            ).compactMap { $0["name"]?.stringValue }
+            guard dbRows.contains("session_id"), dbRows.contains("session_json") else { continue }
+
+            let columns = Set(dbRows)
+            let parentFilter = columns.contains("parent_session_id") ? "WHERE parent_session_id IS NULL" : ""
+            let orderClause = columns.contains("updated_timestamp") ? "ORDER BY updated_timestamp DESC" : ""
+            let sessionRows = SQLiteReader.query(
+                databaseURL: source.dbURL,
+                sql: """
+                SELECT session_id, session_name, committed_head_entry_id, session_json, updated_timestamp
+                FROM sessions
+                \(parentFilter)
+                \(orderClause)
+                LIMIT 8
+                """
+            )
+
+            let walURL = URL(fileURLWithPath: source.dbURL.path + "-wal")
+            let dbMtime = [modificationDate(of: source.dbURL), modificationDate(of: walURL)].compactMap { $0 }.max()
+
+            for (idx, row) in sessionRows.enumerated() {
+                let sid = row["session_id"]?.stringValue ?? "bionic-\(idx)"
+                let sessionName = row["session_name"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+                let headEntryID = row["committed_head_entry_id"]?.stringValue
+                let updatedAt = decodeOpenCodeEpoch(row["updated_timestamp"]?.doubleValue) ?? dbMtime
+
+                guard
+                    let jsonText = row["session_json"]?.stringValue,
+                    let jsonData = jsonText.data(using: .utf8),
+                    let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+                else { continue }
+
+                // Skip internal companion/sub-sessions if marked
+                if let subType = json["subSessionType"] as? String, !subType.isEmpty {
+                    continue
+                }
+
+                let workingDir = (json["sessionParams"] as? [String: Any])?["working_directory"] as? String
+                let rawModelID = (json["modelSpecifier"] as? [String: Any])?["indexedModelIdentifier"] as? String
+                let modelName = formatBionicModelName(rawModelID)
+                let reasoningEffort = ((json["inferenceConfig"] as? [String: Any])?["reasoningLevel"] as? String)
+                    .flatMap { $0.isEmpty ? nil : $0 }
+                let totalTokens = ((json["contextEstimation"] as? [String: Any])?["total"] as? NSNumber)?.intValue
+
+                let age = updatedAt.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
+                let (state, interactionReason) = resolveBionicState(
+                    dbURL: source.dbURL,
+                    headEntryID: headEntryID,
+                    age: age
+                )
+
+                let projectName: String = if let workingDir, !workingDir.isEmpty {
+                    PathResolver.projectDisplayName(for: workingDir, watchedFolders: watchedFolders)
+                } else if let hint = source.projectNameHint, !hint.isEmpty, hint != "No Project" {
+                    hint
+                } else {
+                    label
+                }
+
+                allCollected.append(AgentSnapshot(
+                    kind: .custom,
+                    sessionID: "\(config.id.uuidString):\(sid)",
+                    agentLabel: label,
+                    state: state,
+                    projectName: projectName,
+                    projectPath: workingDir,
+                    gitBranch: PathResolver.gitBranch(for: workingDir),
+                    modelName: modelName,
+                    reasoningEffort: reasoningEffort,
+                    sessionTitle: sessionName,
+                    usage: UsageMetrics(
+                        sessionTotalTokens: totalTokens,
+                        contextTokens: totalTokens
+                    ),
+                    lastUpdated: updatedAt,
+                    resolvedSourcePath: source.dbURL.deletingLastPathComponent().path,
+                    statusMessage: nil,
+                    interactionReason: interactionReason
+                ))
+            }
+        }
+
+        guard !allCollected.isEmpty else {
+            return [
+                AgentSnapshot(
+                    kind: .custom,
+                    sessionID: config.id.uuidString,
+                    agentLabel: label,
+                    state: .idle,
+                    projectName: "—",
+                    projectPath: nil,
+                    gitBranch: nil,
+                    modelName: "—",
+                    reasoningEffort: nil,
+                    sessionTitle: nil,
+                    usage: UsageMetrics(),
+                    lastUpdated: nil,
+                    resolvedSourcePath: root.path,
+                    statusMessage: "Noch keine Bionic-Session"
+                )
+            ]
+        }
+
+        // Sort active/waiting first, then newest
+        let sorted = allCollected.sorted { lhs, rhs in
+            if lhs.state.isActiveOrWaiting != rhs.state.isActiveOrWaiting {
+                return lhs.state.isActiveOrWaiting && !rhs.state.isActiveOrWaiting
+            }
+            return (lhs.lastUpdated ?? .distantPast) > (rhs.lastUpdated ?? .distantPast)
+        }
+
+        var results: [AgentSnapshot] = []
+        var seenProjects: Set<String> = []
+        for snap in sorted {
+            let age = snap.lastUpdated.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
+            let key = snap.projectPath ?? snap.projectName
+            if !snap.state.isActiveOrWaiting && !results.isEmpty {
+                if seenProjects.contains(key) || age > 86_400 {
+                    continue
+                }
+            }
+            seenProjects.insert(key)
+            results.append(snap)
+            if results.count >= limit { break }
+        }
+        return results
+    }
+
+    private static func parseBionicProjectName(at url: URL) -> String? {
+        guard
+            let data = try? Data(contentsOf: url),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let name = json["name"] as? String
+        else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func formatBionicModelName(_ raw: String?) -> String {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return "—"
+        }
+        if let last = trimmed.split(separator: "/").last, !last.isEmpty {
+            return String(last)
+        }
+        return trimmed
+    }
+
+    private static func resolveBionicState(
+        dbURL: URL,
+        headEntryID: String?,
+        age: TimeInterval
+    ) -> (AgentRunState, String?) {
+        guard var currentID = headEntryID, !currentID.isEmpty else {
+            return (age < 20 ? .running : .idle, nil)
+        }
+
+        var tipEntryJSON: String?
+        // Follow any uncommitted child entries appended after committed_head_entry_id (bounded hops)
+        for _ in 0..<8 {
+            let escaped = currentID.replacingOccurrences(of: "'", with: "''")
+            let childRows = SQLiteReader.query(
+                databaseURL: dbURL,
+                sql: "SELECT id, entry_json FROM chat_entries WHERE previous_id = '\(escaped)' ORDER BY rowid DESC LIMIT 1"
+            )
+            if let child = childRows.first,
+               let nextID = child["id"]?.stringValue,
+               nextID != currentID {
+                currentID = nextID
+                tipEntryJSON = child["entry_json"]?.stringValue
+            } else {
+                break
+            }
+        }
+
+        if tipEntryJSON == nil {
+            let escaped = currentID.replacingOccurrences(of: "'", with: "''")
+            let headRows = SQLiteReader.query(
+                databaseURL: dbURL,
+                sql: "SELECT entry_json FROM chat_entries WHERE id = '\(escaped)' LIMIT 1"
+            )
+            tipEntryJSON = headRows.first?["entry_json"]?.stringValue
+        }
+
+        guard
+            let tipStr = tipEntryJSON,
+            let tipData = tipStr.data(using: .utf8),
+            let entry = try? JSONSerialization.jsonObject(with: tipData) as? [String: Any],
+            let entryType = entry["type"] as? String
+        else {
+            return (age < 20 ? .running : .idle, nil)
+        }
+
+        switch entryType {
+        case "elicitationRequest":
+            return age < 86_400 ? (.needsInput, "Rückfrage") : (.idle, nil)
+        case "forkPoint":
+            if (entry["forkPoint"] as? String) == "assistantTurnEnd" {
+                return (.idle, nil)
+            }
+            return age < 21_600 ? (.running, nil) : (.idle, nil)
+        case "interrupted", "error":
+            return (.idle, nil)
+        default:
+            // Active entries before assistantTurnEnd (message, stateChange, turnSummary, etc.)
+            return age < 21_600 ? (.running, nil) : (.idle, nil)
+        }
+    }
+
+    private static func modificationDate(of url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
     }
 
     private static func readRecentJSONLSessions(
