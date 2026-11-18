@@ -1,6 +1,6 @@
 cask "agentorbit" do
   version "1.3.0"
-  sha256 :no_check
+  sha256 "d02500c1310037128381870cc4780bdfac4a9a5c8d9b4bc4f08ebbfc69952957"
 
   url "https://github.com/SimHub/AgentOrbit/releases/download/v#{version}/AgentOrbit.dmg"
   name "AgentOrbit"
