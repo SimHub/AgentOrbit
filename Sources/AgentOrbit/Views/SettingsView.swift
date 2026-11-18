@@ -3,11 +3,19 @@ import AppKit
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case display = "Anzeige"
-    case agents = "Agents"
-    case folders = "Ordner"
+    case display
+    case agents
+    case folders
 
     var id: String { rawValue }
+
+    func title(in language: AppLanguage) -> String {
+        switch self {
+        case .display: return L10n.t("Display", de: "Anzeige", language: language)
+        case .agents: return "Agents"
+        case .folders: return L10n.t("Folders", de: "Ordner", language: language)
+        }
+    }
 }
 
 struct SettingsView: View {
@@ -16,11 +24,15 @@ struct SettingsView: View {
     @ObservedObject private var launchAtLogin = LaunchAtLoginController.shared
     let onDone: () -> Void
 
+    private var lang: AppLanguage {
+        monitor.config.appLanguage
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("", selection: $uiState.settingsTab) {
                 ForEach(SettingsTab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Text(tab.title(in: lang)).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -38,17 +50,17 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Divider()
-
-            HStack {
+            HStack(spacing: 8) {
                 if uiState.settingsTab == .agents {
-                    Button("Auto-Erkennen") {
+                    Button(L10n.t("Auto-Detect", de: "Auto-Erkennen", language: lang)) {
                         let added = monitor.runAutoDiscovery()
-                        uiState.discoveryStatusMessage = added > 0 ? "+\(added) erkannt" : "Alles aktuell"
+                        uiState.discoveryStatusMessage = added > 0
+                            ? L10n.t("+\(added) found", de: "+\(added) erkannt", language: lang)
+                            : L10n.t("Up to date", de: "Alles aktuell", language: lang)
                     }
                     .font(.system(size: 11))
 
-                    Button("Standardpfade") {
+                    Button(L10n.t("Defaults", de: "Standard", language: lang)) {
                         let defaults = KoordinatorConfig.defaultConfig
                         monitor.config.codexPath = defaults.codexPath
                         monitor.config.antigravityPath = defaults.antigravityPath
@@ -63,7 +75,7 @@ struct SettingsView: View {
                     }
                 } else if uiState.settingsTab == .display,
                           (uiState.customPinnedWidth != nil || uiState.customPinnedMaxHeight != nil) {
-                    Button("Auto-Größe zurücksetzen") {
+                    Button(L10n.t("Reset Auto-Size", de: "Auto-Größe", language: lang)) {
                         uiState.customPinnedWidth = nil
                         uiState.customPinnedMaxHeight = nil
                     }
@@ -72,7 +84,7 @@ struct SettingsView: View {
 
                 Spacer()
 
-                Button("Fertig", action: onDone)
+                Button(L10n.t("Done", de: "Fertig", language: lang), action: onDone)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
             }
@@ -100,175 +112,194 @@ struct SettingsView: View {
     }
 
     private var displayTab: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("Ansicht")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $monitor.config.viewMode) {
-                    ForEach(ViewDensityMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsSectionCard(
+                title: L10n.t("Appearance", de: "Darstellung", language: lang),
+                systemImage: "paintbrush"
+            ) {
+                SettingControlRow(L10n.t("View", de: "Ansicht", language: lang)) {
+                    Picker("", selection: $monitor.config.viewMode) {
+                        ForEach(ViewDensityMode.allCases) { mode in
+                            Text(L10n.viewModeTitle(mode, language: lang)).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 224)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 210)
-            }
 
-            HStack {
-                Text("Menüleiste")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $monitor.config.labelMode) {
-                    ForEach(MenuBarLabelMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
+                SettingControlRow(L10n.t("Menu Bar", de: "Menüleiste", language: lang)) {
+                    Picker("", selection: $monitor.config.labelMode) {
+                        ForEach(MenuBarLabelMode.allCases) { mode in
+                            Text(L10n.menuBarLabelTitle(mode, language: lang)).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 248)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 225)
-            }
 
-            HStack {
-                Text("Kontext-Balken")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $monitor.config.antigravityContextWindow) {
-                    Text("Auto").tag(0)
-                    Text("200k").tag(200_000)
-                    Text("500k").tag(500_000)
-                    Text("1M").tag(1_000_000)
-                    Text("Aus").tag(-1)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 210)
-            }
-
-            HStack {
-                Text("Projekt öffnen")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $monitor.config.preferredLauncher) {
-                    ForEach(PreferredLauncher.allCases) { target in
-                        Text(target.title).tag(target)
+                SettingControlRow(L10n.t("Language", de: "Sprache", language: lang)) {
+                    Picker("", selection: $monitor.config.appLanguage) {
+                        ForEach(AppLanguage.allCases) { appLang in
+                            Text(appLang.title(in: lang)).tag(appLang)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 224)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(width: 145)
-            }
 
-            HStack {
-                Text("HUD-Hotkey")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                if HotKeyController.shared.registrationFailed {
-                    Text("belegt")
-                        .font(.system(size: 9.5, weight: .medium))
-                        .foregroundStyle(.orange)
-                }
-                Spacer()
-                Picker("", selection: $monitor.config.hotKeyPreset) {
-                    ForEach(HotKeyPreset.allCases) { preset in
-                        Text(preset.title).tag(preset)
+                SettingControlRow(L10n.t("HUD Opacity", de: "HUD-Deckkraft", language: lang)) {
+                    HStack(spacing: 6) {
+                        Slider(value: $monitor.config.hudOpacity, in: 0.45...1.0, step: 0.05)
+                            .controlSize(.mini)
+                            .frame(width: 120)
+                            .onChange(of: monitor.config.hudOpacity) { _, newOpacity in
+                                PinnedWindowController.shared.updateOpacity(newOpacity)
+                            }
+                        Text("\(Int((monitor.config.hudOpacity * 100).rounded()))%")
+                            .font(.system(size: 10.5, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, alignment: .trailing)
                     }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(width: 145)
-                .onChange(of: monitor.config.hotKeyPreset) { _, nextPreset in
-                    HotKeyController.shared.updatePreset(nextPreset)
                 }
             }
 
-            HStack(spacing: 8) {
-                Text("HUD-Deckkraft")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Slider(value: $monitor.config.hudOpacity, in: 0.45...1.0, step: 0.05)
-                    .controlSize(.mini)
-                    .frame(width: 115)
-                    .onChange(of: monitor.config.hudOpacity) { _, newOpacity in
-                        PinnedWindowController.shared.updateOpacity(newOpacity)
+            SettingsSectionCard(
+                title: L10n.t("Workspace & Controls", de: "Workspace & Steuerung", language: lang),
+                systemImage: "slider.horizontal.3"
+            ) {
+                SettingControlRow(L10n.t("Context Bar", de: "Kontext-Balken", language: lang)) {
+                    Picker("", selection: $monitor.config.antigravityContextWindow) {
+                        Text("Auto").tag(0)
+                        Text("200k").tag(200_000)
+                        Text("500k").tag(500_000)
+                        Text("1M").tag(1_000_000)
+                        Text(L10n.t("Off", de: "Aus", language: lang)).tag(-1)
                     }
-                Text("\(Int((monitor.config.hudOpacity * 100).rounded()))%")
-                    .font(.system(size: 10.5, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 34, alignment: .trailing)
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 248)
+                }
+
+                HStack(spacing: 12) {
+                    HStack(spacing: 6) {
+                        Text(L10n.t("Launcher", de: "Starter", language: lang))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 4)
+                        Picker("", selection: $monitor.config.preferredLauncher) {
+                            ForEach(PreferredLauncher.allCases) { target in
+                                Text(L10n.launcherTitle(target, language: lang)).tag(target)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(width: 124)
+                    }
+
+                    HStack(spacing: 6) {
+                        HStack(spacing: 4) {
+                            Text("Hotkey")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                            if HotKeyController.shared.registrationFailed {
+                                Text(L10n.t("in use", de: "belegt", language: lang))
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        Spacer(minLength: 4)
+                        Picker("", selection: $monitor.config.hotKeyPreset) {
+                            ForEach(HotKeyPreset.allCases) { preset in
+                                Text(L10n.hotKeyTitle(preset, language: lang)).tag(preset)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(width: 108)
+                        .onChange(of: monitor.config.hotKeyPreset) { _, nextPreset in
+                            HotKeyController.shared.updatePreset(nextPreset)
+                        }
+                    }
+                }
+
+                SettingToggleRow(
+                    L10n.t("Show all active projects", de: "Alle aktiven Projekte zeigen", language: lang),
+                    isOn: $monitor.config.showAllActiveProjects
+                )
+
+                SettingToggleRow(
+                    L10n.t("Snap-grid while dragging (⌥ = Free)", de: "Einrast-Grid beim Ziehen (⌥ = Frei)", language: lang),
+                    isOn: $monitor.config.snapToGrid
+                )
+
+                SettingToggleRow(
+                    L10n.t("Cost estimate (~$)", de: "Kosten-Schätzung (~$)", language: lang),
+                    isOn: $monitor.config.showEstimatedCost
+                )
             }
 
-            Divider().opacity(0.6)
-
-            Toggle("Alle aktiven Projekte gleichzeitig anzeigen", isOn: $monitor.config.showAllActiveProjects)
-                .font(.system(size: 11))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-
-            Toggle("Einrast-Grid beim Verschieben (⌥ = Frei)", isOn: $monitor.config.snapToGrid)
-                .font(.system(size: 11))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-
-            HStack(spacing: 12) {
-                Toggle("Fertig-Meldung (Aktiv → Idle)", isOn: $monitor.config.notifyOnCompletion)
-                    .font(.system(size: 11))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .onChange(of: monitor.config.notifyOnCompletion) { _, enabled in
-                        CompletionNotifier.shared.prepareIfNeeded(
-                            enabled: enabled || monitor.config.notifyOnNeedsInput
-                        )
+            SettingsSectionCard(
+                title: L10n.t("Alerts & Startup", de: "Mitteilungen & Start", language: lang),
+                systemImage: "bell.badge"
+            ) {
+                HStack(spacing: 8) {
+                    Text(L10n.t("Completion (Active → Idle)", de: "Fertig-Meldung (Aktiv → Idle)", language: lang))
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                    Spacer()
+                    if monitor.config.notifyOnCompletion || monitor.config.notifyOnNeedsInput {
+                        Toggle(L10n.t("Sound", de: "Ton", language: lang), isOn: $monitor.config.notifySound)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .toggleStyle(.checkbox)
+                            .controlSize(.mini)
                     }
-
-                Spacer()
-
-                if monitor.config.notifyOnCompletion || monitor.config.notifyOnNeedsInput {
-                    Toggle("Ton", isOn: $monitor.config.notifySound)
-                        .font(.system(size: 10.5))
-                        .toggleStyle(.checkbox)
+                    Toggle("", isOn: $monitor.config.notifyOnCompletion)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                         .controlSize(.mini)
+                        .onChange(of: monitor.config.notifyOnCompletion) { _, enabled in
+                            CompletionNotifier.shared.prepareIfNeeded(
+                                enabled: enabled || monitor.config.notifyOnNeedsInput
+                            )
+                        }
                 }
-            }
 
-            Toggle("Meldung bei Eingabe nötig (Freigabe / Rückfrage)", isOn: $monitor.config.notifyOnNeedsInput)
-                .font(.system(size: 11))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+                SettingToggleRow(
+                    L10n.t("Needs input (Approval / Question)", de: "Eingabe nötig (Freigabe / Rückfrage)", language: lang),
+                    isOn: $monitor.config.notifyOnNeedsInput
+                )
                 .onChange(of: monitor.config.notifyOnNeedsInput) { _, enabled in
                     CompletionNotifier.shared.prepareIfNeeded(
                         enabled: enabled || monitor.config.notifyOnCompletion
                     )
                 }
 
-            Toggle("Kosten-Schätzung (~$)", isOn: $monitor.config.showEstimatedCost)
-                .font(.system(size: 11))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-
-            HStack(spacing: 8) {
-                Toggle(
-                    "Bei Anmeldung starten",
-                    isOn: Binding(
-                        get: { launchAtLogin.isEnabled },
-                        set: { launchAtLogin.setEnabled($0) }
+                HStack(spacing: 8) {
+                    Text(L10n.t("Launch at login", de: "Bei Anmeldung starten", language: lang))
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                    if launchAtLogin.requiresApproval {
+                        Text(L10n.t("Approval needed", de: "Freigabe nötig", language: lang))
+                            .font(.system(size: 9.5, weight: .medium))
+                            .foregroundStyle(.orange)
+                    }
+                    Spacer()
+                    Toggle(
+                        "",
+                        isOn: Binding(
+                            get: { launchAtLogin.isEnabled },
+                            set: { launchAtLogin.setEnabled($0) }
+                        )
                     )
-                )
-                .font(.system(size: 11))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-
-                if launchAtLogin.requiresApproval {
-                    Text("Freigabe in macOS nötig")
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(.orange)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
                 }
             }
         }
@@ -276,34 +307,33 @@ struct SettingsView: View {
 
     private var agentsTab: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Standard-Agents")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
+            SettingsSectionCard(
+                title: L10n.t("Built-in Agents", de: "Standard-Agents", language: lang),
+                systemImage: "cpu"
+            ) {
                 PathInputRow(
                     title: ".codex",
                     path: $monitor.config.codexPath,
-                    resolvedHint: monitor.codex.resolvedSourcePath
+                    resolvedHint: monitor.codex.resolvedSourcePath,
+                    language: lang
                 )
 
                 PathInputRow(
                     title: ".antigravity",
                     path: $monitor.config.antigravityPath,
-                    resolvedHint: monitor.antigravity.resolvedSourcePath
+                    resolvedHint: monitor.antigravity.resolvedSourcePath,
+                    language: lang
                 )
             }
 
-            Divider().opacity(0.6)
-
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 5) {
-                    Text("Weitere Agents")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
+            SettingsSectionCard(
+                title: L10n.t("Additional Agents", de: "Weitere Agents", language: lang),
+                systemImage: "puzzlepiece.extension"
+            ) {
+                HStack(spacing: 4) {
                     ForEach([
                         ("OpenCode", "~/.local/share/opencode"),
+                        ("Bionic", "~/.cache/lm-studio/apps/bionic"),
                         ("Pi", "~/.pi/agent"),
                         ("Claude", "~/.claude")
                     ], id: \.0) { preset in
@@ -328,20 +358,25 @@ struct SettingsView: View {
                         .font(.system(size: 9.5, weight: .medium))
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
-                        .help(exists ? "\(preset.0) gefunden – klicken zum Hinzufügen" : "Vorausfüllen für \(preset.0)")
+                        .help(
+                            exists
+                                ? L10n.t("\(preset.0) found – click to add", de: "\(preset.0) gefunden – klicken zum Hinzufügen", language: lang)
+                                : L10n.t("Prefill path for \(preset.0)", de: "Vorausfüllen für \(preset.0)", language: lang)
+                        )
                     }
+                    Spacer()
                 }
 
                 HStack(spacing: 5) {
                     TextField("Name", text: $uiState.newCustomAgentName)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
-                        .frame(width: 76)
+                        .frame(width: 78)
                     TextField("~/.local/share/opencode", text: $uiState.newCustomAgentPath)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                     Button("…") {
-                        if let chosen = pickDirectory(initialPath: uiState.newCustomAgentPath) {
+                        if let chosen = pickDirectory(initialPath: uiState.newCustomAgentPath, language: lang) {
                             uiState.newCustomAgentPath = chosen
                         }
                     }
@@ -391,7 +426,7 @@ struct SettingsView: View {
                                 .buttonStyle(.plain)
                             }
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
+                            .padding(.vertical, 3.5)
                             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
                         }
                     }
@@ -402,21 +437,20 @@ struct SettingsView: View {
 
     private var foldersTab: some View {
         VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Überwachte Projekt-Ordner")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
+            SettingsSectionCard(
+                title: L10n.t("Watched Project Folders", de: "Überwachte Projekt-Ordner", language: lang),
+                systemImage: "folder"
+            ) {
                 HStack(spacing: 6) {
-                    TextField("/Volumes/.../Projekt", text: $uiState.newFolderPath)
+                    TextField(L10n.t("/Volumes/.../Project", de: "/Volumes/.../Projekt", language: lang), text: $uiState.newFolderPath)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                         .onSubmit {
                             addEnteredFolder()
                         }
 
-                    Button("Wählen…") {
-                        if let chosen = pickDirectory(initialPath: uiState.newFolderPath) {
+                    Button(L10n.t("Choose…", de: "Wählen…", language: lang)) {
+                        if let chosen = pickDirectory(initialPath: uiState.newFolderPath, language: lang) {
                             monitor.addWatchedFolder(chosen)
                         }
                     }
@@ -432,7 +466,7 @@ struct SettingsView: View {
                 }
 
                 if monitor.config.watchedFolders.isEmpty {
-                    Text("Optional: Ordner für Projekt-Matching & Live-Git-Branch.")
+                    Text(L10n.t("Optional: Folders for project matching & live Git branch.", de: "Optional: Ordner für Projekt-Matching & Live-Git-Branch.", language: lang))
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 } else {
@@ -454,26 +488,23 @@ struct SettingsView: View {
                                 .buttonStyle(.plain)
                             }
                             .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
+                            .padding(.vertical, 3.5)
                             .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
                         }
                     }
                 }
             }
 
-            Divider().opacity(0.6)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Model-Alias (z. B. M526 → Gemini 4 (Medium))")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
+            SettingsSectionCard(
+                title: L10n.t("Model Aliases", de: "Model-Aliase", language: lang),
+                systemImage: "tag"
+            ) {
                 HStack(spacing: 6) {
                     TextField("ID (M526)", text: $uiState.aliasKey)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                         .frame(width: 82)
-                    TextField("Anzeigename", text: $uiState.aliasValue)
+                    TextField(L10n.t("Display name", de: "Anzeigename", language: lang), text: $uiState.aliasValue)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11))
                     Button {
@@ -504,6 +535,9 @@ struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
                 }
             }
         }
@@ -517,10 +551,86 @@ struct SettingsView: View {
     }
 }
 
+private struct SettingsSectionCard<Content: View>: View {
+    let title: String
+    let systemImage: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(title)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 1)
+
+            VStack(alignment: .leading, spacing: 6) {
+                content
+            }
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.075), lineWidth: 0.75)
+        )
+    }
+}
+
+private struct SettingControlRow<Control: View>: View {
+    let label: String
+    @ViewBuilder let control: Control
+
+    init(_ label: String, @ViewBuilder control: () -> Control) {
+        self.label = label
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(.primary.opacity(0.9))
+                .lineLimit(1)
+            Spacer(minLength: 6)
+            control
+        }
+    }
+}
+
+private struct SettingToggleRow: View {
+    let title: String
+    @Binding var isOn: Bool
+
+    init(_ title: String, isOn: Binding<Bool>) {
+        self.title = title
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 11))
+                .lineLimit(1)
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+    }
+}
+
 private struct PathInputRow: View {
     let title: String
     @Binding var path: String
     let resolvedHint: String?
+    let language: AppLanguage
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -528,11 +638,11 @@ private struct PathInputRow: View {
                 Text(title)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .frame(width: 78, alignment: .leading)
-                TextField("Pfad eingeben", text: $path)
+                TextField(L10n.t("Enter path", de: "Pfad eingeben", language: language), text: $path)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 11))
                 Button("…") {
-                    if let chosen = pickDirectory(initialPath: path) {
+                    if let chosen = pickDirectory(initialPath: path, language: language) {
                         path = chosen
                     }
                 }
@@ -551,13 +661,13 @@ private struct PathInputRow: View {
 }
 
 @MainActor
-private func pickDirectory(initialPath: String) -> String? {
+private func pickDirectory(initialPath: String, language: AppLanguage) -> String? {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
     panel.canChooseDirectories = true
     panel.allowsMultipleSelection = false
     panel.showsHiddenFiles = true
-    panel.prompt = "Auswählen"
+    panel.prompt = L10n.t("Select", de: "Auswählen", language: language)
     let expanded = PathResolver.expandTilde(initialPath)
     if !expanded.isEmpty {
         panel.directoryURL = URL(fileURLWithPath: expanded)

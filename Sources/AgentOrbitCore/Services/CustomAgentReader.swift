@@ -604,6 +604,7 @@ enum CustomAgentReader {
                 scanned += 1
                 if scanned > 300 { break }
                 guard fileURL.pathExtension.lowercased() == "jsonl" else { continue }
+                if fileURL.pathComponents.contains("subagents") { continue }
                 let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey])
                 guard values?.isRegularFile == true, let mtime = values?.contentModificationDate else { continue }
                 jsonlFiles.append((fileURL, mtime))
@@ -619,8 +620,8 @@ enum CustomAgentReader {
 
         for item in jsonlFiles.prefix(limit * 2) {
             let age = Date().timeIntervalSince(item.mtime)
-            let state: AgentRunState = age < 20 ? .running : .idle
-            let parsed = parseGenericJSONLTail(at: item.url)
+            let parsed = parseJSONLTail(at: item.url, age: age)
+            let state = parsed.state
             let cwd = parsed.cwd
             let projectKey = cwd ?? item.url.deletingPathExtension().lastPathComponent
 
@@ -631,6 +632,19 @@ enum CustomAgentReader {
             }
             seenProjects.insert(projectKey)
 
+            var usage = UsageMetrics(
+                sessionTotalTokens: parsed.totalTokens,
+                contextTokens: parsed.contextTokens,
+                contextWindow: parsed.contextWindow,
+                isContextWindowEstimated: parsed.contextWindow != nil,
+                inputTokens: parsed.inputTokens,
+                cacheReadTokens: parsed.cacheReadTokens,
+                outputTokens: parsed.outputTokens
+            )
+            if usage.sessionTotalTokens == nil {
+                usage.sessionTotalTokens = parsed.totalTokens
+            }
+
             results.append(AgentSnapshot(
                 kind: .custom,
                 sessionID: "\(config.id.uuidString):\(item.url.lastPathComponent)",
@@ -638,14 +652,15 @@ enum CustomAgentReader {
                 state: state,
                 projectName: cwd.map { PathResolver.projectDisplayName(for: $0, watchedFolders: watchedFolders) } ?? item.url.deletingPathExtension().lastPathComponent,
                 projectPath: cwd,
-                gitBranch: PathResolver.gitBranch(for: cwd),
+                gitBranch: PathResolver.gitBranch(for: cwd) ?? parsed.gitBranch,
                 modelName: parsed.model ?? "—",
                 reasoningEffort: nil,
                 sessionTitle: nil,
-                usage: UsageMetrics(sessionTotalTokens: parsed.totalTokens),
+                usage: usage,
                 lastUpdated: item.mtime,
                 resolvedSourcePath: root.path,
-                statusMessage: nil
+                statusMessage: nil,
+                interactionReason: parsed.interactionReason
             ))
 
             if results.count >= limit { break }
@@ -654,36 +669,164 @@ enum CustomAgentReader {
         return results
     }
 
-    private static func parseGenericJSONLTail(at url: URL) -> (cwd: String?, model: String?, totalTokens: Int?) {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return (nil, nil, nil) }
+    private struct JSONLTailInfo {
+        var cwd: String?
+        var gitBranch: String?
+        var model: String?
+        var totalTokens: Int?
+        var inputTokens: Int?
+        var cacheReadTokens: Int?
+        var outputTokens: Int?
+        var contextTokens: Int?
+        var contextWindow: Int?
+        var state: AgentRunState
+        var interactionReason: String?
+    }
+
+    private static func parseJSONLTail(at url: URL, age: TimeInterval) -> JSONLTailInfo {
+        guard let handle = try? FileHandle(forReadingFrom: url) else {
+            return JSONLTailInfo(state: age < 20 ? .running : .idle)
+        }
         defer { try? handle.close() }
         let fileSize = (try? handle.seekToEnd()) ?? 0
-        let tailBytes: UInt64 = 32_768
+        let tailBytes: UInt64 = 65_536
         let offset = fileSize > tailBytes ? fileSize - tailBytes : 0
         try? handle.seek(toOffset: offset)
         guard let data = try? handle.readToEnd(), let text = String(data: data, encoding: .utf8) else {
-            return (nil, nil, nil)
+            return JSONLTailInfo(state: age < 20 ? .running : .idle)
+        }
+
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+        if offset > 0, !lines.isEmpty {
+            lines.removeFirst()
         }
 
         var cwd: String?
+        var gitBranch: String?
         var model: String?
         var totalTokens: Int?
+        var sumInput = 0
+        var sumCache = 0
+        var sumOutput = 0
+        var lastContext = 0
+        var sawClaudeUsage = false
+        var pendingTools: [String: String] = [:]
+        var pendingOrder: [String] = []
+        var hasOpenAssistantTurn = false
 
-        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: true).reversed() {
+        for rawLine in lines {
             guard let lineData = rawLine.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any] else { continue }
-            if cwd == nil {
-                cwd = (json["cwd"] as? String) ?? (json["project"] as? String)
+
+            if let c = (json["cwd"] as? String) ?? (json["project"] as? String), !c.isEmpty {
+                cwd = c
             }
-            if model == nil {
-                model = json["model"] as? String
+            if let gb = json["gitBranch"] as? String, !gb.isEmpty {
+                gitBranch = gb
             }
-            if totalTokens == nil, let usage = json["usage"] as? [String: Any] {
-                totalTokens = usage["total_tokens"] as? Int
+            if let topModel = json["model"] as? String, !topModel.isEmpty, topModel != "<synthetic>" {
+                model = topModel
             }
-            if cwd != nil, model != nil, totalTokens != nil { break }
+            if let usage = json["usage"] as? [String: Any],
+               let tot = (usage["total_tokens"] as? NSNumber)?.intValue {
+                totalTokens = tot
+            }
+
+            // Claude Code `message` envelope (`assistant` / `user`)
+            let entryType = json["type"] as? String
+            if let msg = json["message"] as? [String: Any] {
+                if let msgModel = msg["model"] as? String, !msgModel.isEmpty, msgModel != "<synthetic>" {
+                    model = msgModel
+                }
+                if let usage = msg["usage"] as? [String: Any] {
+                    let inp = (usage["input_tokens"] as? NSNumber)?.intValue ?? 0
+                    let cacheRead = (usage["cache_read_input_tokens"] as? NSNumber)?.intValue ?? 0
+                    let cacheCreate = (usage["cache_creation_input_tokens"] as? NSNumber)?.intValue ?? 0
+                    let out = (usage["output_tokens"] as? NSNumber)?.intValue ?? 0
+                    let contextNow = inp + cacheRead + cacheCreate + out
+                    if contextNow > 0 {
+                        sawClaudeUsage = true
+                        sumInput += inp + cacheCreate
+                        sumCache += cacheRead
+                        sumOutput += out
+                        lastContext = contextNow
+                    }
+                }
+
+                let stopReason = msg["stop_reason"] as? String
+                if entryType == "assistant" {
+                    hasOpenAssistantTurn = (stopReason == nil || stopReason == "tool_use")
+                } else if entryType == "user" {
+                    hasOpenAssistantTurn = false
+                }
+
+                if let content = msg["content"] as? [[String: Any]] {
+                    var sawUserTextWithoutResult = false
+                    for block in content {
+                        let blockType = block["type"] as? String
+                        if blockType == "tool_use",
+                           let id = block["id"] as? String,
+                           let name = block["name"] as? String {
+                            pendingTools[id] = name
+                            pendingOrder.append(id)
+                        } else if blockType == "tool_result",
+                                  let toolUseID = block["tool_use_id"] as? String {
+                            pendingTools.removeValue(forKey: toolUseID)
+                        } else if entryType == "user", blockType == "text" {
+                            sawUserTextWithoutResult = true
+                        }
+                    }
+                    if sawUserTextWithoutResult {
+                        pendingTools.removeAll()
+                        pendingOrder.removeAll()
+                    }
+                }
+
+                if stopReason == "end_turn" {
+                    pendingTools.removeAll()
+                    pendingOrder.removeAll()
+                    hasOpenAssistantTurn = false
+                }
+            }
         }
-        return (cwd, model, totalTokens)
+
+        let unresolvedTool: String? = pendingOrder.reversed().compactMap { pendingTools[$0] }.first
+        let state: AgentRunState
+        let interactionReason: String?
+
+        if unresolvedTool == "AskUserQuestion", age < 86_400 {
+            state = .needsInput
+            interactionReason = "Rückfrage"
+        } else if unresolvedTool != nil, age >= 10, age < 7_200 {
+            state = .needsInput
+            interactionReason = "Freigabe nötig"
+        } else if (unresolvedTool != nil && age < 10) || (hasOpenAssistantTurn && age < 25) || age < 20 {
+            state = .running
+            interactionReason = nil
+        } else {
+            state = .idle
+            interactionReason = nil
+        }
+
+        let contextWindow: Int? = if let model, model.lowercased().contains("claude") {
+            model.lowercased().contains("[1m]") ? 1_000_000 : 200_000
+        } else {
+            nil
+        }
+
+        return JSONLTailInfo(
+            cwd: cwd,
+            gitBranch: gitBranch,
+            model: model,
+            totalTokens: sawClaudeUsage ? (sumInput + sumCache + sumOutput) : totalTokens,
+            inputTokens: sawClaudeUsage ? sumInput : nil,
+            cacheReadTokens: sawClaudeUsage ? sumCache : nil,
+            outputTokens: sawClaudeUsage ? sumOutput : nil,
+            contextTokens: sawClaudeUsage ? lastContext : nil,
+            contextWindow: contextWindow,
+            state: state,
+            interactionReason: interactionReason
+        )
     }
 
     private static func newestModificationDate(in root: URL, maxDepth: Int) -> Date? {

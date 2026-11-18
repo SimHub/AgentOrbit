@@ -48,7 +48,9 @@ struct ReaderTestRunner {
             ("testAntigravityWaitingStepDetection", testAntigravityWaitingStepDetection),
             ("testNeedsInputTransitionDetection", testNeedsInputTransitionDetection),
             ("testOpenCodeV2SessionDetection", testOpenCodeV2SessionDetection),
-            ("testLMStudioBionicSessionDetection", testLMStudioBionicSessionDetection)
+            ("testLMStudioBionicSessionDetection", testLMStudioBionicSessionDetection),
+            ("testAppLocalizationMappings", testAppLocalizationMappings),
+            ("testClaudeCodeJSONLDetection", testClaudeCodeJSONLDetection)
         ]
 
         var passed = 0
@@ -768,6 +770,66 @@ struct ReaderTestRunner {
         )
         let idle = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
         try expectEqual(idle?.state, .idle)
+    }
+
+    static func testAppLocalizationMappings(tempRoot: URL) throws {
+        try expectEqual(L10n.stateTitle(.needsInput, language: .english), "Needs input")
+        try expectEqual(L10n.stateTitle(.needsInput, language: .german), "Eingabe nötig")
+        try expectEqual(L10n.stateTitle(.running, language: .english), "Active")
+        try expectEqual(L10n.reason("Freigabe nötig", language: .english), "Approval needed")
+        try expectEqual(L10n.reason("Rückfrage", language: .english), "Question")
+        try expectEqual(L10n.reason("Freigabe nötig", language: .german), "Freigabe nötig")
+        try expectEqual(L10n.statusMessage("SSD nicht gemountet (/Volumes/X)", language: .english), "SSD not mounted (/Volumes/X)")
+
+        let now = Date(timeIntervalSince1970: 1_700_000_120)
+        try expectEqual(L10n.relativeTime(from: now.addingTimeInterval(-3), language: .english, now: now), "just now")
+        try expectEqual(L10n.relativeTime(from: now.addingTimeInterval(-3), language: .german, now: now), "gerade eben")
+
+        // Backward-compatible decoding without appLanguage defaults to .system
+        let legacyJSON = Data(#"{"codexPath":"/tmp/c","antigravityPath":"/tmp/a","watchedFolders":[],"labelMode":"icon","antigravityModelAliases":{}}"#.utf8)
+        let decoded = try JSONDecoder().decode(KoordinatorConfig.self, from: legacyJSON)
+        try expectEqual(decoded.appLanguage, .system)
+    }
+
+    static func testClaudeCodeJSONLDetection(tempRoot: URL) throws {
+        let claudeRoot = tempRoot.appendingPathComponent("claude")
+        let projectDir = claudeRoot.appendingPathComponent("projects/-Users-demo-orbit")
+        let subagentsDir = projectDir.appendingPathComponent("subagents")
+        try FileManager.default.createDirectory(at: subagentsDir, withIntermediateDirectories: true)
+
+        let sessionURL = projectDir.appendingPathComponent("session-1.jsonl")
+        let subagentURL = subagentsDir.appendingPathComponent("agent-sub.jsonl")
+
+        let askJSONL = """
+        {"type":"user","cwd":"/tmp/orbit-app","gitBranch":"feat/claude","message":{"role":"user","content":[{"type":"text","text":"Check tests"}]}}
+        {"type":"assistant","cwd":"/tmp/orbit-app","gitBranch":"feat/claude","message":{"model":"claude-sonnet-4-6","stop_reason":"tool_use","usage":{"input_tokens":1200,"cache_read_input_tokens":800,"cache_creation_input_tokens":100,"output_tokens":250},"content":[{"type":"tool_use","id":"tu_1","name":"AskUserQuestion"}]}}
+        """
+        try askJSONL.write(to: sessionURL, atomically: true, encoding: .utf8)
+        try "{\"type\":\"assistant\"}\n".write(to: subagentURL, atomically: true, encoding: .utf8)
+
+        let cfg = CustomAgentConfig(name: "Claude", path: claudeRoot.path, isEnabled: true)
+        let snaps = CustomAgentReader.readSessions(config: cfg, watchedFolders: [])
+        try expectEqual(snaps.count, 1)
+        let snap = snaps[0]
+        try expectEqual(snap.state, .needsInput)
+        try expectEqual(snap.interactionReason, "Rückfrage")
+        try expectEqual(snap.projectName, "orbit-app")
+        try expectEqual(snap.gitBranch, "feat/claude")
+        try expectEqual(snap.modelName, "claude-sonnet-4-6")
+        try expectEqual(snap.usage.sessionTotalTokens, 2350)
+        try expectEqual(snap.usage.contextWindow, 200_000)
+
+        // Resolved with tool_result + end_turn -> back to .idle when > 20s old
+        let doneJSONL = askJSONL + "\n" + """
+        {"type":"user","cwd":"/tmp/orbit-app","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_1","content":"yes"}]}}
+        {"type":"assistant","cwd":"/tmp/orbit-app","message":{"model":"claude-sonnet-4-6","stop_reason":"end_turn","usage":{"input_tokens":1500,"cache_read_input_tokens":800,"output_tokens":100},"content":[{"type":"text","text":"All done"}]}}
+        """
+        try doneJSONL.write(to: sessionURL, atomically: true, encoding: .utf8)
+        let staleDate = Date().addingTimeInterval(-35)
+        try FileManager.default.setAttributes([.modificationDate: staleDate], ofItemAtPath: sessionURL.path)
+
+        let idleSnap = CustomAgentReader.readSessions(config: cfg, watchedFolders: []).first
+        try expectEqual(idleSnap?.state, .idle)
     }
 
     private static func execSQL(at url: URL, sql: String) throws {

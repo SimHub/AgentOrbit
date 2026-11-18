@@ -37,10 +37,14 @@ jobs:
       - name: Build universal app and DMG
         env:
           AGENTORBIT_VERSION: ${{ steps.meta.outputs.version }}
-        run: ./scripts/build_app.sh --universal --dmg
+        run: |
+          ./scripts/build_app.sh --universal --dmg
+          shasum -a 256 dist/AgentOrbit.dmg | tee dist/AgentOrbit.dmg.sha256
 
       - name: Upload DMG to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/AgentOrbit.dmg
+          files: |
+            dist/AgentOrbit.dmg
+            dist/AgentOrbit.dmg.sha256
           generate_release_notes: true

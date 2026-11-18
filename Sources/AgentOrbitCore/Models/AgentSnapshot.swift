@@ -367,6 +367,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
     public var hudOpacity: Double
     public var showEstimatedCost: Bool
     public var customAgents: [CustomAgentConfig]
+    public var appLanguage: AppLanguage
 
     public init(
         codexPath: String,
@@ -385,7 +386,8 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         hotKeyPreset: HotKeyPreset = .controlOptionO,
         hudOpacity: Double = 0.96,
         showEstimatedCost: Bool = true,
-        customAgents: [CustomAgentConfig] = []
+        customAgents: [CustomAgentConfig] = [],
+        appLanguage: AppLanguage = .system
     ) {
         self.codexPath = codexPath
         self.antigravityPath = antigravityPath
@@ -404,6 +406,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         self.hudOpacity = min(max(hudOpacity, 0.45), 1.0)
         self.showEstimatedCost = showEstimatedCost
         self.customAgents = customAgents
+        self.appLanguage = appLanguage
     }
 
     public init(from decoder: Decoder) throws {
@@ -427,6 +430,7 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         hudOpacity = min(max(rawOpacity, 0.45), 1.0)
         showEstimatedCost = try container.decodeIfPresent(Bool.self, forKey: .showEstimatedCost) ?? true
         customAgents = try container.decodeIfPresent([CustomAgentConfig].self, forKey: .customAgents) ?? []
+        appLanguage = try container.decodeIfPresent(AppLanguage.self, forKey: .appLanguage) ?? .system
     }
 
     public static var defaultConfig: KoordinatorConfig {

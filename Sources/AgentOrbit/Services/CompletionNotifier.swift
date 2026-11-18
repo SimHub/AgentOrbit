@@ -21,17 +21,17 @@ final class CompletionNotifier {
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
-    func notify(_ events: [CompletedSessionEvent], playSound: Bool) {
+    func notify(_ events: [CompletedSessionEvent], playSound: Bool, language: AppLanguage = .system) {
         guard !events.isEmpty else { return }
         enqueueAfterAuthorization {
-            Self.deliverCompletion(events, playSound: playSound)
+            Self.deliverCompletion(events, playSound: playSound, language: language)
         }
     }
 
-    func notifyNeedsInput(_ events: [NeedsInputEvent], playSound: Bool) {
+    func notifyNeedsInput(_ events: [NeedsInputEvent], playSound: Bool, language: AppLanguage = .system) {
         guard !events.isEmpty else { return }
         enqueueAfterAuthorization {
-            Self.deliverNeedsInput(events, playSound: playSound)
+            Self.deliverNeedsInput(events, playSound: playSound, language: language)
         }
     }
 
@@ -61,17 +61,18 @@ final class CompletionNotifier {
 
     private static func deliverCompletion(
         _ events: [CompletedSessionEvent],
-        playSound: Bool
+        playSound: Bool,
+        language: AppLanguage
     ) {
         let center = UNUserNotificationCenter.current()
         for event in events {
             let content = UNMutableNotificationContent()
-            content.title = "\(event.agentLabel) fertig"
+            content.title = L10n.t("\(event.agentLabel) finished", de: "\(event.agentLabel) fertig", language: language)
             let durationText = formatDuration(event.durationSeconds)
             if event.projectName != "—" {
                 content.body = "\(event.projectName) · \(durationText)"
             } else {
-                content.body = "Session beendet nach \(durationText)"
+                content.body = L10n.t("Session finished after \(durationText)", de: "Session beendet nach \(durationText)", language: language)
             }
             if playSound {
                 content.sound = .default
@@ -88,16 +89,18 @@ final class CompletionNotifier {
 
     private static func deliverNeedsInput(
         _ events: [NeedsInputEvent],
-        playSound: Bool
+        playSound: Bool,
+        language: AppLanguage
     ) {
         let center = UNUserNotificationCenter.current()
         for event in events {
             let content = UNMutableNotificationContent()
-            content.title = "\(event.agentLabel) wartet auf dich"
+            content.title = L10n.t("\(event.agentLabel) is waiting for you", de: "\(event.agentLabel) wartet auf dich", language: language)
+            let localizedReason = L10n.reason(event.reason, language: language) ?? event.reason
             if event.projectName != "—" {
-                content.body = "\(event.projectName) · \(event.reason)"
+                content.body = "\(event.projectName) · \(localizedReason)"
             } else {
-                content.body = event.reason
+                content.body = localizedReason
             }
             if playSound {
                 content.sound = .default

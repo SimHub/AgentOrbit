@@ -31,11 +31,13 @@ struct AgentOrbitApp: App {
         let uiState = PopoverUIState()
         monitor.onSessionsCompleted = { [weak monitor] events in
             let playSound = monitor?.config.notifySound ?? true
-            CompletionNotifier.shared.notify(events, playSound: playSound)
+            let language = monitor?.config.appLanguage ?? .system
+            CompletionNotifier.shared.notify(events, playSound: playSound, language: language)
         }
         monitor.onSessionsNeedsInput = { [weak monitor] events in
             let playSound = monitor?.config.notifySound ?? true
-            CompletionNotifier.shared.notifyNeedsInput(events, playSound: playSound)
+            let language = monitor?.config.appLanguage ?? .system
+            CompletionNotifier.shared.notifyNeedsInput(events, playSound: playSound, language: language)
         }
         CompletionNotifier.shared.prepareIfNeeded(
             enabled: monitor.config.notifyOnCompletion || monitor.config.notifyOnNeedsInput

@@ -92,6 +92,10 @@ struct PopoverView: View {
     var isInPinnedPanel: Bool = false
     @Environment(\.dismiss) private var dismiss
 
+    private var lang: AppLanguage {
+        monitor.config.appLanguage
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
@@ -122,7 +126,7 @@ struct PopoverView: View {
                             NSCursor.pop()
                         }
                     }
-                    .help("Ziehen zum Verschieben · Einrast-Grid (⌥ = Frei)")
+                    .help(L10n.t("Drag to move · Snap-grid (⌥ = Free)", de: "Ziehen zum Verschieben · Einrast-Grid (⌥ = Frei)", language: lang))
                 }
                 header
                 Divider()
@@ -146,6 +150,7 @@ struct PopoverView: View {
                         maxWidth: maxSafePanelWidth,
                         currentScrollHeight: currentVisibleCardsHeight,
                         maxScrollHeightLimit: maxAllowedScrollHeight,
+                        language: lang,
                         onSizeChange: { w, h in
                             uiState.customPinnedWidth = w
                             uiState.customPinnedMaxHeight = h
@@ -164,6 +169,7 @@ struct PopoverView: View {
                         maxWidth: maxSafePanelWidth,
                         currentScrollHeight: currentVisibleCardsHeight,
                         maxScrollHeightLimit: maxAllowedScrollHeight,
+                        language: lang,
                         onSizeChange: { w, h in
                             uiState.customPinnedWidth = w
                             uiState.customPinnedMaxHeight = h
@@ -228,13 +234,13 @@ struct PopoverView: View {
     }
 
     private var panelWidth: CGFloat {
-        if uiState.showingSettings { return min(390, maxSafePanelWidth) }
+        if uiState.showingSettings { return min(440, maxSafePanelWidth) }
         if isInPinnedPanel, let custom = uiState.customPinnedWidth {
             return min(max(240, custom), maxSafePanelWidth)
         }
         switch columnCount {
         case 3: return min(920, maxSafePanelWidth)
-        case 2: return min(640, maxSafePanelWidth)
+        case 2: return min(680, maxSafePanelWidth)
         default:
             return monitor.config.viewMode == .minimal ? 280 : min(360, maxSafePanelWidth)
         }
@@ -306,7 +312,11 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(effectiveViewMode == .minimal ? Color.accentColor : Color.secondary)
-            .help("Ansicht: \(effectiveViewMode.title) (Klicken zum Wechseln)")
+            .help(L10n.t(
+                "View: \(L10n.viewModeTitle(effectiveViewMode, language: lang)) (Click to switch)",
+                de: "Ansicht: \(L10n.viewModeTitle(effectiveViewMode, language: lang)) (Klicken zum Wechseln)",
+                language: lang
+            ))
 
             Button {
                 let nextPinned = !uiState.isPinned
@@ -322,7 +332,7 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(uiState.isPinned ? Color.accentColor : Color.secondary)
-            .help(uiState.isPinned ? "Lösen" : "Oben anpinnen")
+            .help(uiState.isPinned ? L10n.t("Unpin", de: "Lösen", language: lang) : L10n.t("Pin on top", de: "Oben anpinnen", language: lang))
 
             Button {
                 monitor.refresh()
@@ -332,7 +342,7 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("Jetzt aktualisieren")
+            .help(L10n.t("Refresh now", de: "Jetzt aktualisieren", language: lang))
 
             Button {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -344,7 +354,7 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(uiState.showingSettings ? Color.primary : Color.secondary)
-            .help(uiState.showingSettings ? "Zurück" : "Ordner & Anzeige")
+            .help(uiState.showingSettings ? L10n.t("Back", de: "Zurück", language: lang) : L10n.t("Settings & Folders", de: "Ordner & Anzeige", language: lang))
 
             Button {
                 NSApplication.shared.terminate(nil)
@@ -354,7 +364,7 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .help("Beenden")
+            .help(L10n.t("Quit", de: "Beenden", language: lang))
         }
         .padding(.horizontal, isUltraNarrow ? 10 : 14)
         .padding(.vertical, isUltraNarrow ? 8 : 10)
@@ -370,13 +380,13 @@ struct PopoverView: View {
 
     private var subtitleText: String {
         let base: String = if monitor.isAnyWaitingForUser {
-            "Echtzeit · Eingabe nötig"
+            L10n.t("Live · Needs input", de: "Echtzeit · Eingabe nötig", language: lang)
         } else if monitor.isAnyLive {
-            "Echtzeit · Aktiv"
+            L10n.t("Live · Active", de: "Echtzeit · Aktiv", language: lang)
         } else {
-            "Echtzeit · Bereit"
+            L10n.t("Live · Ready", de: "Echtzeit · Bereit", language: lang)
         }
-        return isInPinnedPanel ? "\(base) · Angepinnt" : base
+        return isInPinnedPanel ? "\(base) · \(L10n.t("Pinned", de: "Angepinnt", language: lang))" : base
     }
 
     private var previewBody: some View {
@@ -393,7 +403,7 @@ struct PopoverView: View {
                             Circle()
                                 .fill(Color.orange)
                                 .frame(width: 6, height: 6)
-                            Text("\(waitingCount) Wartet")
+                            Text(L10n.t("\(waitingCount) Waiting", de: "\(waitingCount) Wartet", language: lang))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.orange)
                             Text("·")
@@ -403,7 +413,7 @@ struct PopoverView: View {
                             Circle()
                                 .fill(Color.green)
                                 .frame(width: 6, height: 6)
-                            Text("\(liveCount) Aktiv")
+                            Text(L10n.t("\(liveCount) Active", de: "\(liveCount) Aktiv", language: lang))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(.primary)
                             Text("·")
@@ -422,7 +432,7 @@ struct PopoverView: View {
                                 uiState.onlyActiveFilter.toggle()
                             }
                         } label: {
-                            Text(uiState.onlyActiveFilter ? "Alle zeigen" : "Nur Aktiv")
+                            Text(uiState.onlyActiveFilter ? L10n.t("Show all", de: "Alle zeigen", language: lang) : L10n.t("Active only", de: "Nur Aktiv", language: lang))
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(uiState.onlyActiveFilter ? Color.accentColor : Color.secondary)
                                 .padding(.horizontal, 7)
@@ -490,6 +500,7 @@ struct PopoverView: View {
                         isNarrow: isNarrow,
                         preferredLauncher: monitor.config.preferredLauncher,
                         showEstimatedCost: monitor.config.showEstimatedCost,
+                        language: lang,
                         isUsageExpanded: uiState.expandedUsageIDs.contains(snapshot.id),
                         onToggleUsage: {
                             withAnimation(.easeInOut(duration: 0.15)) {
@@ -510,6 +521,7 @@ struct PopoverView: View {
                         isNarrow: false,
                         preferredLauncher: monitor.config.preferredLauncher,
                         showEstimatedCost: monitor.config.showEstimatedCost,
+                        language: lang,
                         isUsageExpanded: uiState.expandedUsageIDs.contains(snapshot.id),
                         onToggleUsage: {
                             withAnimation(.easeInOut(duration: 0.15)) {
@@ -525,7 +537,7 @@ struct PopoverView: View {
     private var watchedFoldersSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("Ordner")
+                Text(L10n.t("Folders", de: "Ordner", language: lang))
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -583,6 +595,7 @@ private struct ResizeCornerGrip: View {
     let maxWidth: CGFloat
     let currentScrollHeight: CGFloat
     let maxScrollHeightLimit: CGFloat
+    let language: AppLanguage
     let onSizeChange: (CGFloat, CGFloat?) -> Void
     let onReset: () -> Void
 
@@ -656,7 +669,7 @@ private struct ResizeCornerGrip: View {
                     PinnedWindowController.shared.endResize()
                 }
         )
-        .help("Ziehen: Breite & max. Listen-Höhe · Doppelklick = Auto-Größe")
+        .help(L10n.t("Drag: width & max height · Double-click = Auto size", de: "Ziehen: Breite & max. Listen-Höhe · Doppelklick = Auto-Größe", language: language))
     }
 }
 
@@ -667,6 +680,7 @@ private struct AgentCardView: View {
     let isNarrow: Bool
     let preferredLauncher: PreferredLauncher
     let showEstimatedCost: Bool
+    let language: AppLanguage
     let isUsageExpanded: Bool
     let onToggleUsage: () -> Void
 
@@ -695,12 +709,12 @@ private struct AgentCardView: View {
         .contextMenu {
             if let path = snapshot.projectPath {
                 ForEach(ProjectLauncher.availableTargets()) { target in
-                    Button("In \(target.title) öffnen") {
+                    Button(L10n.t("Open in \(target.title)", de: "In \(target.title) öffnen", language: language)) {
                         ProjectLauncher.open(path: path, with: target)
                     }
                 }
                 Divider()
-                Button("Pfad kopieren") {
+                Button(L10n.t("Copy path", de: "Pfad kopieren", language: language)) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(path, forType: .string)
                 }
@@ -740,7 +754,11 @@ private struct AgentCardView: View {
                             .truncationMode(.middle)
                     }
                     .buttonStyle(.plain)
-                    .help("In \(ProjectLauncher.resolveTarget(preferred: preferredLauncher, agentKind: snapshot.kind).title) öffnen (Rechtsklick für Auswahl)")
+                    .help(L10n.t(
+                        "Open in \(ProjectLauncher.resolveTarget(preferred: preferredLauncher, agentKind: snapshot.kind).title) (Right-click to choose)",
+                        de: "In \(ProjectLauncher.resolveTarget(preferred: preferredLauncher, agentKind: snapshot.kind).title) öffnen (Rechtsklick für Auswahl)",
+                        language: language
+                    ))
                 } else {
                     Text(snapshot.projectName)
                         .font(.system(size: 11.5, weight: .semibold))
@@ -754,7 +772,7 @@ private struct AgentCardView: View {
                     HStack(spacing: 3) {
                         Image(systemName: "hand.raised.fill")
                             .font(.system(size: 8.5, weight: .semibold))
-                        Text("Wartet")
+                        Text(L10n.t("Waiting", de: "Wartet", language: language))
                             .font(.system(size: 9.5, weight: .semibold))
                     }
                     .foregroundStyle(.orange)
@@ -768,14 +786,14 @@ private struct AgentCardView: View {
                         .foregroundStyle(.green)
                         .lineLimit(1)
                 } else if let updated = snapshot.lastUpdated {
-                    Text(Formatters.relativeTime(from: updated))
+                    Text(L10n.relativeTime(from: updated, language: language))
                         .font(.system(size: 9.5))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
             }
 
-            if let statusMessage = snapshot.statusMessage, snapshot.projectName == "—" {
+            if let statusMessage = L10n.statusMessage(snapshot.statusMessage, language: language), snapshot.projectName == "—" {
                 Text(statusMessage)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
@@ -796,7 +814,7 @@ private struct AgentCardView: View {
                     Spacer(minLength: 4)
 
                     if let primary = snapshot.usage.primaryLimit {
-                        LimitPill(limit: primary)
+                        LimitPill(limit: primary, language: language)
                     } else if let branch = snapshot.gitBranch {
                         Text(branch)
                             .font(.system(size: 9.5, design: .monospaced))
@@ -825,12 +843,12 @@ private struct AgentCardView: View {
                         HStack(spacing: 3.5) {
                             Image(systemName: "hand.raised.fill")
                                 .font(.system(size: 8.5, weight: .semibold))
-                            Text(snapshot.interactionReason ?? snapshot.state.rawValue)
+                            Text(L10n.reason(snapshot.interactionReason, language: language) ?? L10n.stateTitle(snapshot.state, language: language))
                         }
                     } else if snapshot.state.isLive, let since = snapshot.activeSince {
-                        LiveDurationLabel(since: since, prefix: "Aktiv · ")
+                        LiveDurationLabel(since: since, prefix: L10n.t("Active · ", de: "Aktiv · ", language: language))
                     } else {
-                        Text(snapshot.state.rawValue)
+                        Text(L10n.stateTitle(snapshot.state, language: language))
                     }
                 }
                 .font(.system(size: 10, weight: .medium))
@@ -842,13 +860,13 @@ private struct AgentCardView: View {
                 Spacer()
 
                 if let updated = snapshot.lastUpdated {
-                    Text(Formatters.relativeTime(from: updated))
+                    Text(L10n.relativeTime(from: updated, language: language))
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
                 }
             }
 
-            if let statusMessage = snapshot.statusMessage, snapshot.projectName == "—" {
+            if let statusMessage = L10n.statusMessage(snapshot.statusMessage, language: language), snapshot.projectName == "—" {
                 Text(statusMessage)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -889,7 +907,11 @@ private struct AgentCardView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .help("In \(ProjectLauncher.resolveTarget(preferred: preferredLauncher, agentKind: snapshot.kind).title) öffnen · \(path)")
+                        .help(L10n.t(
+                            "Open in \(ProjectLauncher.resolveTarget(preferred: preferredLauncher, agentKind: snapshot.kind).title) · \(path)",
+                            de: "In \(ProjectLauncher.resolveTarget(preferred: preferredLauncher, agentKind: snapshot.kind).title) öffnen · \(path)",
+                            language: language
+                        ))
                     }
                 }
 
@@ -943,7 +965,7 @@ private struct AgentCardView: View {
                    let window = usage.contextWindow {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
-                            Text("Kontext")
+                            Text(L10n.t("Context", de: "Kontext", language: language))
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -964,7 +986,7 @@ private struct AgentCardView: View {
                     }
                 } else if let used = usage.contextTokens {
                     HStack {
-                        Text("Kontext")
+                        Text(L10n.t("Context", de: "Kontext", language: language))
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -974,7 +996,7 @@ private struct AgentCardView: View {
                     }
                 }
 
-                HStack(spacing: 10) {
+                HStack(spacing: 6) {
                     if let total = usage.sessionTotalTokens {
                         Label(
                             "\(Formatters.compactTokens(total)) tok",
@@ -982,26 +1004,36 @@ private struct AgentCardView: View {
                         )
                         .font(.system(size: 10.5, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     }
                     if let steps = usage.stepCount {
                         Label("\(steps) Steps", systemImage: "list.bullet")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     if let cost = costEstimate {
                         Text(cost.formatted)
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
                             .foregroundStyle(.secondary)
-                            .help(cost.isEstimated ? "Geschätzte Session-Kosten (Basis: Token-Preise)" : "Erfasste Session-Kosten")
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .help(cost.isEstimated
+                                ? L10n.t("Estimated session cost (from token pricing)", de: "Geschätzte Session-Kosten (Basis: Token-Preise)", language: language)
+                                : L10n.t("Recorded session cost", de: "Erfasste Session-Kosten", language: language))
                     }
 
-                    Spacer()
+                    Spacer(minLength: 2)
 
-                    if let primary = usage.primaryLimit {
-                        LimitPill(limit: primary)
-                    }
-                    if let secondary = usage.secondaryLimit {
-                        LimitPill(limit: secondary)
+                    if !(isUsageExpanded || viewMode == .detailed) {
+                        if let primary = usage.primaryLimit {
+                            LimitPill(limit: primary, language: language)
+                        }
+                        if let secondary = usage.secondaryLimit {
+                            LimitPill(limit: secondary, language: language)
+                        }
                     }
 
                     if hasDetailedUsage {
@@ -1018,7 +1050,8 @@ private struct AgentCardView: View {
                             .background(Color.primary.opacity(0.06), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help("Token-Nutzung im Detail")
+                        .fixedSize(horizontal: true, vertical: false)
+                        .help(L10n.t("Detailed token usage", de: "Token-Nutzung im Detail", language: language))
                     }
                 }
 
@@ -1068,11 +1101,11 @@ private struct AgentCardView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(Array(limits.enumerated()), id: \.offset) { _, limit in
-                        LimitDetailRow(limit: limit)
+                        LimitDetailRow(limit: limit, language: language)
                     }
                 }
             } else if snapshot.kind == .antigravity {
-                Text("Account-Quota % wird von Antigravity nicht lokal gespeichert.")
+                Text(L10n.t("Account quota % is not stored locally by Antigravity.", de: "Account-Quota % wird von Antigravity nicht lokal gespeichert.", language: language))
                     .font(.system(size: 9.5))
                     .foregroundStyle(.tertiary)
             }
@@ -1184,6 +1217,7 @@ private struct CircularQuotaRing: View {
 
 private struct LimitDetailRow: View {
     let limit: RateLimitWindow
+    let language: AppLanguage
 
     private var remainingInt: Int {
         Int(limit.remainingPercent.rounded())
@@ -1202,7 +1236,7 @@ private struct LimitDetailRow: View {
                 Text(Formatters.limitTitle(limit.windowMinutes))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.primary)
-                Text("Resets \(Formatters.resetLabel(limit.resetsAt))")
+                Text(L10n.t("Resets \(L10n.resetTimeLabel(limit.resetsAt, language: language))", de: "Reset \(L10n.resetTimeLabel(limit.resetsAt, language: language))", language: language))
                     .font(.system(size: 9.5))
                     .foregroundStyle(.secondary)
             }
@@ -1226,6 +1260,7 @@ private struct LimitDetailRow: View {
 
 private struct LimitPill: View {
     let limit: RateLimitWindow
+    let language: AppLanguage
 
     private var remainingInt: Int {
         Int(limit.remainingPercent.rounded())
@@ -1251,10 +1286,12 @@ private struct LimitPill: View {
                 .foregroundStyle(remainingInt <= 35 ? pillColor : .primary)
         }
         .font(.system(size: 10, design: .monospaced))
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background(pillColor.opacity(0.10), in: Capsule())
-        .help("\(Formatters.limitTitle(limit.windowMinutes)): \(remainingInt)% left · Resets \(Formatters.resetLabel(limit.resetsAt))")
+        .help("\(Formatters.limitTitle(limit.windowMinutes)): \(remainingInt)% left · Resets \(L10n.resetTimeLabel(limit.resetsAt, language: language))")
     }
 }
 
@@ -1316,31 +1353,5 @@ private enum Formatters {
             return "\(mins)m \(secs)s"
         }
         return "\(secs)s"
-    }
-
-    static func relativeTime(from date: Date) -> String {
-        let diff = Int(Date().timeIntervalSince(date))
-        if diff < 10 { return "gerade eben" }
-        if diff < 60 { return "vor \(diff)s" }
-        if diff < 3600 { return "vor \(diff / 60)m" }
-        if diff < 86400 { return "vor \(diff / 3600)h" }
-        return "vor \(diff / 86400)d"
-    }
-
-    static func resetLabel(_ date: Date?) -> String {
-        guard let date else { return "—" }
-        let diff = Int(date.timeIntervalSinceNow)
-        if diff <= 0 { return "jetzt" }
-        let hours = diff / 3600
-        let mins = (diff % 3600) / 60
-        if hours >= 24 {
-            let days = hours / 24
-            let remHours = hours % 24
-            return "in \(days)d \(remHours)h"
-        }
-        if hours > 0 {
-            return "in \(hours)h \(mins)m"
-        }
-        return "in \(mins)m"
     }
 }
