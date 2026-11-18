@@ -5,18 +5,14 @@ on:
     branches: [main]
     paths-ignore:
       - 'README.md'
-      - 'CONTEXT.md'
       - 'LICENSE'
       - 'docs/**'
-      - '.github/FUNDING.yml'
   pull_request:
     branches: [main]
     paths-ignore:
       - 'README.md'
-      - 'CONTEXT.md'
       - 'LICENSE'
       - 'docs/**'
-      - '.github/FUNDING.yml'
 
 jobs:
   test-and-build:

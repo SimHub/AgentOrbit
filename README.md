@@ -9,7 +9,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-cyan.svg" alt="License: MIT" /></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue.svg" alt="macOS 14+" />
   <img src="https://img.shields.io/badge/Dependencies-0-brightgreen.svg" alt="Zero Dependencies" />
-  <a href="https://buymeacoffee.com/simhub"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-simhub-FFDD00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
 A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required) macOS menu bar & floating desktop HUD for AI coding agents — reading live status, projects, Git branches, models, runtime, and usage metrics locally from **Codex**, **Antigravity**, **Claude Code**, **OpenCode**, **LM Studio Bionic**, and optional custom agents (**Pi**, etc.).
@@ -122,14 +121,6 @@ AGENTORBIT_BUNDLE_ID=dev.agentorbit.AgentOrbit AGENTORBIT_VERSION=1.0.0 ./script
 
 > [!NOTE]
 > Uses only Apple system frameworks (`SwiftUI`, `AppKit`, `CoreServices`, `SQLite3`, `UserNotifications`, `Carbon`, `ServiceManagement`) — no Xcode project or external packages required.
-
----
-
-## Support
-
-If AgentOrbit saves you time while juggling multiple coding agents, consider supporting the project:
-
-<a href="https://buymeacoffee.com/simhub"><img src="docs/assets/buymeacoffee.gif" width="216" height="54" alt="Buy Me a Coffee" /></a>
 
 ---
 
