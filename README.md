@@ -90,10 +90,6 @@ Release builds are currently ad-hoc signed. With Apple notarization still to be 
 
 *Die Releases sind derzeit ad-hoc signiert. Die Apple-Notarisierung steht noch aus. Beim ersten Start kann macOS deshalb einen Sicherheitshinweis anzeigen.*
 
-### Homebrew Cask
-
-Installation through Homebrew requires a published tap. The current cask uses the release DMG and removes the app’s quarantine attribute during installation. [AgentOrbit cask](packaging/homebrew/Casks/agentorbit.rb)
-
 ---
 
 ## Build, Test & Release (Command Line Tools only)
