@@ -7,3 +7,5 @@ dist/
 xcuserdata/
 .env
 CONTEXT.md
+/packaging/homebrew/MAINTAINER.local.md
+/packaging/homebrew/local/
