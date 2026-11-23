@@ -44,11 +44,17 @@ struct AgentOrbitApp: App {
         )
         _monitor = StateObject(wrappedValue: monitor)
         _uiState = StateObject(wrappedValue: uiState)
-        HotKeyController.shared.configure(preset: monitor.config.hotKeyPreset) { [weak monitor, weak uiState] in
+        HotKeyController.shared.configure(config: monitor.config) { [weak monitor, weak uiState] action in
             guard let monitor, let uiState else { return }
-            let next = !uiState.isPinned
-            uiState.isPinned = next
-            PinnedWindowController.shared.setPinned(next, monitor: monitor, uiState: uiState)
+            switch action {
+            case .toggleHUD:
+                uiState.isPinned.toggle()
+                PinnedWindowController.shared.setPinned(uiState.isPinned, monitor: monitor, uiState: uiState)
+            case .cycleView:
+                uiState.cycleView(on: monitor)
+            case .toggleActiveProjects:
+                monitor.config.showAllActiveProjects.toggle()
+            }
         }
         if uiState.isPinned {
             DispatchQueue.main.async {

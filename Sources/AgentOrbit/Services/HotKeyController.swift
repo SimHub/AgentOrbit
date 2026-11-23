@@ -1,56 +1,186 @@
 import AgentOrbitCore
+import AppKit
 import Carbon
 import Foundation
+
+extension HotKeyAction {
+    var preference: WritableKeyPath<KoordinatorConfig, HotKeyPreset> {
+        switch self {
+        case .toggleHUD: \KoordinatorConfig.hotKeyPreset
+        case .cycleView: \KoordinatorConfig.viewHotKeyPreset
+        case .toggleActiveProjects: \KoordinatorConfig.activeProjectsHotKeyPreset
+        }
+    }
+}
 
 @MainActor
 final class HotKeyController: ObservableObject {
     static let shared = HotKeyController()
 
-    @Published private(set) var registrationFailed = false
-    var onTrigger: (() -> Void)?
+    enum RecordingError {
+        case modifierRequired
+        case conflict
 
-    private var hotKeyRef: EventHotKeyRef?
+        func title(in language: AppLanguage) -> String {
+            switch self {
+            case .modifierRequired:
+                L10n.t("Use Control, Option, or Command", de: "Ctrl, Option oder Cmd verwenden", language: language)
+            case .conflict:
+                L10n.t("Shortcut already in use", de: "Tastenkürzel bereits belegt", language: language)
+            }
+        }
+    }
+
+    private struct KeySpec: Hashable {
+        let keyCode: UInt32
+        let modifiers: UInt32
+
+        init(_ keyCode: Int, _ modifiers: Int) {
+            self.keyCode = UInt32(keyCode)
+            self.modifiers = UInt32(modifiers)
+        }
+    }
+
+    private static let modifierFlags: [(NSEvent.ModifierFlags, CustomHotKey.Modifiers, Int)] = [
+        (.control, .control, controlKey),
+        (.option, .option, optionKey),
+        (.shift, .shift, shiftKey),
+        (.command, .command, cmdKey),
+    ]
+
+    @Published private(set) var registrationFailures: Set<HotKeyAction> = []
+    @Published private(set) var recordingAction: HotKeyAction?
+    @Published private(set) var recordingError: RecordingError?
+    private var onTrigger: ((HotKeyAction) -> Void)?
+
+    private var hotKeyRefs: [HotKeyAction: EventHotKeyRef] = [:]
     private var eventHandlerRef: EventHandlerRef?
-    private var activePreset: HotKeyPreset = .none
+    private var activeShortcuts: [HotKeyAction: KeySpec] = [:]
+    private var recordingMonitor: Any?
+    private var recordingWindowObserver: NSObjectProtocol?
 
     private init() {}
 
-    func configure(preset: HotKeyPreset, onTrigger: @escaping () -> Void) {
+    func configure(config: KoordinatorConfig, onTrigger: @escaping (HotKeyAction) -> Void) {
         self.onTrigger = onTrigger
-        updatePreset(preset)
+        updateShortcuts(from: config)
     }
 
-    func updatePreset(_ preset: HotKeyPreset) {
-        guard preset != activePreset || (preset != .none && hotKeyRef == nil) else { return }
-        activePreset = preset
-        unregister()
-        registrationFailed = false
+    func updateShortcuts(from config: KoordinatorConfig) {
+        var shortcuts: [HotKeyAction: KeySpec] = [:]
+        for action in HotKeyAction.allCases {
+            shortcuts[action] = keySpec(for: action, in: config)
+        }
+        guard shortcuts != activeShortcuts else { return }
+        activeShortcuts = shortcuts
+        if recordingAction == nil {
+            registerShortcuts()
+        }
+    }
 
-        guard let spec = keySpec(for: preset) else { return }
+    func isAssigned(_ preset: HotKeyPreset, excluding action: HotKeyAction, in config: KoordinatorConfig) -> Bool {
+        guard let spec = keySpec(for: preset) else { return false }
+        return HotKeyAction.allCases.contains { $0 != action && keySpec(for: $0, in: config) == spec }
+    }
+
+    func beginRecording(for action: HotKeyAction, onRecord: @escaping (CustomHotKey) -> Void) {
+        cancelRecording()
+        unregisterShortcuts()
+        recordingAction = action
+        recordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            self.record(event, for: action, onRecord: onRecord)
+            return nil
+        }
+        if recordingMonitor == nil {
+            cancelRecording()
+        } else if let window = NSApp.keyWindow {
+            recordingWindowObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didResignKeyNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.cancelRecording() }
+            }
+        }
+    }
+
+    func cancelRecording() {
+        guard recordingAction != nil else { return }
+        if let recordingMonitor {
+            NSEvent.removeMonitor(recordingMonitor)
+            self.recordingMonitor = nil
+        }
+        if let recordingWindowObserver {
+            NotificationCenter.default.removeObserver(recordingWindowObserver)
+            self.recordingWindowObserver = nil
+        }
+        recordingAction = nil
+        recordingError = nil
+        registerShortcuts()
+    }
+
+    private func record(_ event: NSEvent, for action: HotKeyAction, onRecord: (CustomHotKey) -> Void) {
+        guard !event.isARepeat else { return }
+        let modifiers = Self.modifierFlags.reduce(into: CustomHotKey.Modifiers()) { result, flag in
+            if event.modifierFlags.contains(flag.0) {
+                result.insert(flag.1)
+            }
+        }
+        if event.keyCode == UInt16(kVK_Escape), modifiers.isEmpty {
+            cancelRecording()
+            return
+        }
+        guard !modifiers.intersection([.control, .option, .command]).isEmpty else {
+            recordingError = .modifierRequired
+            return
+        }
+        let shortcut = CustomHotKey(keyCode: event.keyCode, modifiers: modifiers, keyLabel: keyLabel(for: event))
+        let spec = keySpec(for: shortcut)
         installHandlerIfNeeded()
+        guard !activeShortcuts.contains(where: { $0.key != action && $0.value == spec }),
+              let probe = register(spec, for: action) else {
+            recordingError = .conflict
+            return
+        }
+        UnregisterEventHotKey(probe)
+        cancelRecording()
+        onRecord(shortcut)
+    }
 
-        let hotKeyID = EventHotKeyID(signature: 0x414F5242, id: 1) // 'AORB'
+    private func unregisterShortcuts() {
+
+        for ref in hotKeyRefs.values {
+            UnregisterEventHotKey(ref)
+        }
+        hotKeyRefs.removeAll()
+    }
+
+    private func registerShortcuts() {
+        unregisterShortcuts()
+        if !activeShortcuts.isEmpty {
+            installHandlerIfNeeded()
+        }
+        var registeredSpecs: Set<KeySpec> = []
+        var failures: Set<HotKeyAction> = []
+        for action in HotKeyAction.allCases {
+            guard let spec = activeShortcuts[action] else { continue }
+            if !registeredSpecs.contains(spec), let ref = register(spec, for: action) {
+                hotKeyRefs[action] = ref
+                registeredSpecs.insert(spec)
+            } else {
+                failures.insert(action)
+            }
+        }
+        registrationFailures = failures
+    }
+
+    private func register(_ spec: KeySpec, for action: HotKeyAction) -> EventHotKeyRef? {
+        guard eventHandlerRef != nil else { return nil }
+        let hotKeyID = EventHotKeyID(signature: 0x414F5242, id: action.rawValue) // 'AORB'
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(
-            spec.keyCode,
-            spec.modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &ref
+            spec.keyCode, spec.modifiers, hotKeyID, GetApplicationEventTarget(), UInt32(kEventHotKeyExclusive), &ref
         )
-        if status == noErr {
-            hotKeyRef = ref
-        } else {
-            registrationFailed = true
-        }
-    }
-
-    func unregister() {
-        if let hotKeyRef {
-            UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
-        }
+        return status == noErr ? ref : nil
     }
 
     private func installHandlerIfNeeded() {
@@ -75,14 +205,16 @@ final class HotKeyController: ObservableObject {
                     nil,
                     &hotKeyID
                 )
-                guard err == noErr, hotKeyID.id == 1 else {
+                guard err == noErr, hotKeyID.signature == 0x414F5242,
+                      let action = HotKeyAction(rawValue: hotKeyID.id) else {
                     return OSStatus(eventNotHandledErr)
                 }
                 let rawPtr = UnsafeMutableRawPointer(userData)
                 let box = SendablePointerBox(rawPtr)
                 DispatchQueue.main.async {
                     let controller = Unmanaged<HotKeyController>.fromOpaque(box.pointer).takeUnretainedValue()
-                    controller.onTrigger?()
+                    guard controller.hotKeyRefs[action] != nil else { return }
+                    controller.onTrigger?(action)
                 }
                 return noErr
             },
@@ -96,20 +228,67 @@ final class HotKeyController: ObservableObject {
         }
     }
 
-    private func keySpec(for preset: HotKeyPreset) -> (keyCode: UInt32, modifiers: UInt32)? {
+    private func keySpec(for action: HotKeyAction, in config: KoordinatorConfig) -> KeySpec? {
+        if let custom = config.customHotKeys[action] {
+            return keySpec(for: custom)
+        }
+        return keySpec(for: config[keyPath: action.preference])
+    }
+
+    private func keySpec(for custom: CustomHotKey) -> KeySpec {
+        let modifiers = Self.modifierFlags.reduce(0) { result, flag in
+            result | (custom.modifiers.contains(flag.1) ? flag.2 : 0)
+        }
+        return KeySpec(Int(custom.keyCode), modifiers)
+    }
+
+    private func keySpec(for preset: HotKeyPreset) -> KeySpec? {
         switch preset {
         case .none:
             return nil
         case .controlOptionO:
-            return (UInt32(kVK_ANSI_O), UInt32(controlKey | optionKey))
+            return KeySpec(kVK_ANSI_O, controlKey | optionKey)
         case .controlOptionA:
-            return (UInt32(kVK_ANSI_A), UInt32(controlKey | optionKey))
+            return KeySpec(kVK_ANSI_A, controlKey | optionKey)
         case .commandShiftO:
-            return (UInt32(kVK_ANSI_O), UInt32(cmdKey | shiftKey))
+            return KeySpec(kVK_ANSI_O, cmdKey | shiftKey)
         case .controlOptionSpace:
-            return (UInt32(kVK_Space), UInt32(controlKey | optionKey))
+            return KeySpec(kVK_Space, controlKey | optionKey)
         case .optionSpace:
-            return (UInt32(kVK_Space), UInt32(optionKey))
+            return KeySpec(kVK_Space, optionKey)
+        case .controlOptionV:
+            return KeySpec(kVK_ANSI_V, controlKey | optionKey)
+        case .controlOptionP:
+            return KeySpec(kVK_ANSI_P, controlKey | optionKey)
+        }
+    }
+
+    private func keyLabel(for event: NSEvent) -> String {
+        switch Int(event.keyCode) {
+        case kVK_Space: return "␣"
+        case kVK_Tab: return "⇥"
+        case kVK_Return, kVK_ANSI_KeypadEnter: return "↩"
+        case kVK_Escape: return "⎋"
+        case kVK_Delete: return "⌫"
+        case kVK_ForwardDelete: return "⌦"
+        case kVK_LeftArrow: return "←"
+        case kVK_RightArrow: return "→"
+        case kVK_UpArrow: return "↑"
+        case kVK_DownArrow: return "↓"
+        case kVK_Home: return "↖"
+        case kVK_End: return "↘"
+        case kVK_PageUp: return "⇞"
+        case kVK_PageDown: return "⇟"
+        default:
+            if let characters = event.charactersIgnoringModifiers, let scalar = characters.unicodeScalars.first {
+                if (0xF704...0xF726).contains(scalar.value) {
+                    return "F\(scalar.value - 0xF703)"
+                }
+                if scalar.properties.generalCategory != .privateUse, !CharacterSet.controlCharacters.contains(scalar) {
+                    return characters.uppercased()
+                }
+            }
+            return "#\(event.keyCode)"
         }
     }
 }

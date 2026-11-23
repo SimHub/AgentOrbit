@@ -9,6 +9,14 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var icon: String {
+        switch self {
+        case .display: "slider.horizontal.3"
+        case .agents: "cpu"
+        case .folders: "folder"
+        }
+    }
+
     func title(in language: AppLanguage) -> String {
         switch self {
         case .display: return L10n.t("Display", de: "Anzeige", language: language)
@@ -22,6 +30,7 @@ struct SettingsView: View {
     @ObservedObject var monitor: CoordinatorMonitor
     @ObservedObject var uiState: PopoverUIState
     @ObservedObject private var launchAtLogin = LaunchAtLoginController.shared
+    @ObservedObject private var hotKeys = HotKeyController.shared
     let onDone: () -> Void
 
     private var lang: AppLanguage {
@@ -30,13 +39,29 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("", selection: $uiState.settingsTab) {
+            HStack(spacing: 4) {
                 ForEach(SettingsTab.allCases) { tab in
-                    Text(tab.title(in: lang)).tag(tab)
+                    let selected = uiState.settingsTab == tab
+                    Button {
+                        uiState.settingsTab = tab
+                    } label: {
+                        Label(tab.title(in: lang), systemImage: tab.icon)
+                            .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                            .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .background(
+                                selected ? Color.accentColor.opacity(0.12) : .clear,
+                                in: RoundedRectangle(cornerRadius: 7)
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            .padding(3)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
 
             Group {
                 switch uiState.settingsTab {
@@ -183,48 +208,16 @@ struct SettingsView: View {
                     .frame(width: 248)
                 }
 
-                HStack(spacing: 12) {
-                    HStack(spacing: 6) {
-                        Text(L10n.t("Launcher", de: "Starter", language: lang))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 4)
-                        Picker("", selection: $monitor.config.preferredLauncher) {
-                            ForEach(PreferredLauncher.allCases) { target in
-                                Text(L10n.launcherTitle(target, language: lang)).tag(target)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .controlSize(.small)
-                        .frame(width: 124)
-                    }
-
-                    HStack(spacing: 6) {
-                        HStack(spacing: 4) {
-                            Text("Hotkey")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                            if HotKeyController.shared.registrationFailed {
-                                Text(L10n.t("in use", de: "belegt", language: lang))
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                        Spacer(minLength: 4)
-                        Picker("", selection: $monitor.config.hotKeyPreset) {
-                            ForEach(HotKeyPreset.allCases) { preset in
-                                Text(L10n.hotKeyTitle(preset, language: lang)).tag(preset)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .controlSize(.small)
-                        .frame(width: 108)
-                        .onChange(of: monitor.config.hotKeyPreset) { _, nextPreset in
-                            HotKeyController.shared.updatePreset(nextPreset)
+                SettingControlRow(L10n.t("Launcher", de: "Starter", language: lang)) {
+                    Picker("", selection: $monitor.config.preferredLauncher) {
+                        ForEach(PreferredLauncher.allCases) { target in
+                            Text(L10n.launcherTitle(target, language: lang)).tag(target)
                         }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .frame(width: 124)
                 }
 
                 SettingToggleRow(
@@ -242,6 +235,20 @@ struct SettingsView: View {
                     isOn: $monitor.config.showEstimatedCost
                 )
             }
+
+            SettingsSectionCard(
+                title: L10n.t("Keyboard Shortcuts", de: "Tastenkürzel", language: lang),
+                systemImage: "keyboard"
+            ) {
+                hotKeyRow(.toggleHUD, title: L10n.t("Toggle HUD", de: "HUD ein- und ausblenden", language: lang), icon: "macwindow")
+                hotKeyRow(.cycleView, title: L10n.t("Switch view", de: "Ansicht wechseln", language: lang), icon: "rectangle.3.group")
+                hotKeyRow(
+                    .toggleActiveProjects,
+                    title: L10n.t("Show all active projects", de: "Alle aktiven Projekte zeigen", language: lang),
+                    icon: "square.stack"
+                )
+            }
+            .onDisappear { hotKeys.cancelRecording() }
 
             SettingsSectionCard(
                 title: L10n.t("Alerts & Startup", de: "Mitteilungen & Start", language: lang),
@@ -303,6 +310,85 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private func hotKeyRow(_ action: HotKeyAction, title: String, icon: String) -> some View {
+        let isRecording = hotKeys.recordingAction == action
+        let preset = monitor.config[keyPath: action.preference]
+        let custom = monitor.config.customHotKeys[action]
+        return HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 19)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                if isRecording {
+                    Text(hotKeys.recordingError?.title(in: lang) ?? L10n.t("Press a shortcut…", de: "Tastenkürzel drücken …", language: lang))
+                        .font(.system(size: 10))
+                        .foregroundStyle(hotKeys.recordingError == nil ? Color.secondary : Color.orange)
+                } else if hotKeys.registrationFailures.contains(action) {
+                    Text(L10n.t("Shortcut unavailable", de: "Tastenkürzel nicht verfügbar", language: lang))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                }
+            }
+            Spacer(minLength: 6)
+
+            if isRecording {
+                Button(L10n.t("Cancel", de: "Abbrechen", language: lang)) {
+                    hotKeys.cancelRecording()
+                }
+                .controlSize(.small)
+            } else {
+                Menu {
+                    ForEach(HotKeyPreset.allCases) { choice in
+                        let isSelected = custom == nil && choice == preset
+                        let occupied = hotKeys.isAssigned(choice, excluding: action, in: monitor.config)
+                        let title = L10n.hotKeyTitle(choice, language: lang)
+                        Button {
+                            var config = monitor.config
+                            config[keyPath: action.preference] = choice
+                            config.customHotKeys[action] = nil
+                            monitor.config = config
+                            hotKeys.updateShortcuts(from: config)
+                        } label: {
+                            if isSelected {
+                                Label(title, systemImage: "checkmark")
+                            } else if occupied {
+                                Text(L10n.t("\(title) (in use)", de: "\(title) (belegt)", language: lang))
+                            } else {
+                                Text(title)
+                            }
+                        }
+                        .disabled(occupied && !isSelected)
+                    }
+                    Divider()
+                    Button {
+                        hotKeys.beginRecording(for: action) { [weak monitor = monitor, weak hotKeys = hotKeys] shortcut in
+                            guard let monitor, let hotKeys else { return }
+                            var config = monitor.config
+                            config.customHotKeys[action] = shortcut
+                            monitor.config = config
+                            hotKeys.updateShortcuts(from: config)
+                        }
+                    } label: {
+                        Label(L10n.t("Record custom shortcut…", de: "Eigenes Kürzel aufnehmen …", language: lang), systemImage: "keyboard")
+                    }
+                } label: {
+                    Text(custom?.title ?? L10n.hotKeyTitle(preset, language: lang))
+                        .lineLimit(1)
+                        .frame(minWidth: 70)
+                }
+                .controlSize(.small)
+                .accessibilityLabel(title)
+                .disabled(hotKeys.recordingAction != nil)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private var agentsTab: some View {
@@ -560,11 +646,14 @@ private struct SettingsSectionCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 20, height: 20)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
+                    .accessibilityHidden(true)
                 Text(title)
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary)
             }
             .padding(.bottom, 1)
 

@@ -18,7 +18,9 @@ final class CompletionNotifier {
         guard enabled, isAppBundle, !hasRequestedAuthorization else { return }
         hasRequestedAuthorization = true
         let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        Task {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        }
     }
 
     func notify(_ events: [CompletedSessionEvent], playSound: Bool, language: AppLanguage = .system) {
@@ -41,21 +43,18 @@ final class CompletionNotifier {
 
         if !hasRequestedAuthorization {
             hasRequestedAuthorization = true
-            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-                guard granted else { return }
-                Task { @MainActor in
-                    action()
-                }
+            Task {
+                guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
+                action()
             }
             return
         }
 
-        center.getNotificationSettings { settings in
+        Task {
+            let settings = await center.notificationSettings()
             let allowed = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
             guard allowed else { return }
-            Task { @MainActor in
-                action()
-            }
+            action()
         }
     }
 

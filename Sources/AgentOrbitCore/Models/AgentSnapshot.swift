@@ -333,6 +333,8 @@ public enum HotKeyPreset: String, Codable, CaseIterable, Identifiable, Sendable 
     case commandShiftO = "cmdShiftO"
     case controlOptionSpace = "ctrlOptSpace"
     case optionSpace = "optSpace"
+    case controlOptionV = "ctrlOptV"
+    case controlOptionP = "ctrlOptP"
 
     public var id: String { rawValue }
 
@@ -344,7 +346,45 @@ public enum HotKeyPreset: String, Codable, CaseIterable, Identifiable, Sendable 
         case .commandShiftO: return "⌘⇧ O"
         case .controlOptionSpace: return "⌃⌥ Space"
         case .optionSpace: return "⌥ Space"
+        case .controlOptionV: return "⌃⌥ V"
+        case .controlOptionP: return "⌃⌥ P"
         }
+    }
+}
+
+public enum HotKeyAction: UInt32, CaseIterable, Codable, Sendable {
+    case toggleHUD = 1
+    case cycleView
+    case toggleActiveProjects
+}
+
+public struct CustomHotKey: Codable, Equatable, Sendable {
+    public struct Modifiers: OptionSet, Codable, Sendable {
+        public let rawValue: UInt8
+
+        public init(rawValue: UInt8) {
+            self.rawValue = rawValue
+        }
+
+        public static let control = Self(rawValue: 1 << 0)
+        public static let option = Self(rawValue: 1 << 1)
+        public static let shift = Self(rawValue: 1 << 2)
+        public static let command = Self(rawValue: 1 << 3)
+    }
+
+    public let keyCode: UInt16
+    public let modifiers: Modifiers
+    public let keyLabel: String
+
+    public init(keyCode: UInt16, modifiers: Modifiers, keyLabel: String) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+        self.keyLabel = keyLabel
+    }
+
+    public var title: String {
+        let symbols: [(Modifiers, String)] = [(.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
+        return symbols.filter { modifiers.contains($0.0) }.map { $0.1 }.joined() + " " + keyLabel
     }
 }
 
@@ -364,6 +404,9 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
     public var notifySound: Bool
     public var preferredLauncher: PreferredLauncher
     public var hotKeyPreset: HotKeyPreset
+    public var viewHotKeyPreset: HotKeyPreset
+    public var activeProjectsHotKeyPreset: HotKeyPreset
+    public var customHotKeys: [HotKeyAction: CustomHotKey]
     public var hudOpacity: Double
     public var showEstimatedCost: Bool
     public var customAgents: [CustomAgentConfig]
@@ -384,6 +427,9 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         notifySound: Bool = true,
         preferredLauncher: PreferredLauncher = .auto,
         hotKeyPreset: HotKeyPreset = .controlOptionO,
+        viewHotKeyPreset: HotKeyPreset = .none,
+        activeProjectsHotKeyPreset: HotKeyPreset = .none,
+        customHotKeys: [HotKeyAction: CustomHotKey] = [:],
         hudOpacity: Double = 0.96,
         showEstimatedCost: Bool = true,
         customAgents: [CustomAgentConfig] = [],
@@ -403,6 +449,9 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         self.notifySound = notifySound
         self.preferredLauncher = preferredLauncher
         self.hotKeyPreset = hotKeyPreset
+        self.viewHotKeyPreset = viewHotKeyPreset
+        self.activeProjectsHotKeyPreset = activeProjectsHotKeyPreset
+        self.customHotKeys = customHotKeys
         self.hudOpacity = min(max(hudOpacity, 0.45), 1.0)
         self.showEstimatedCost = showEstimatedCost
         self.customAgents = customAgents
@@ -426,6 +475,9 @@ public struct KoordinatorConfig: Codable, Equatable, Sendable {
         notifySound = try container.decodeIfPresent(Bool.self, forKey: .notifySound) ?? true
         preferredLauncher = try container.decodeIfPresent(PreferredLauncher.self, forKey: .preferredLauncher) ?? .auto
         hotKeyPreset = try container.decodeIfPresent(HotKeyPreset.self, forKey: .hotKeyPreset) ?? .controlOptionO
+        viewHotKeyPreset = try container.decodeIfPresent(HotKeyPreset.self, forKey: .viewHotKeyPreset) ?? .none
+        activeProjectsHotKeyPreset = try container.decodeIfPresent(HotKeyPreset.self, forKey: .activeProjectsHotKeyPreset) ?? .none
+        customHotKeys = try container.decodeIfPresent([HotKeyAction: CustomHotKey].self, forKey: .customHotKeys) ?? [:]
         let rawOpacity = try container.decodeIfPresent(Double.self, forKey: .hudOpacity) ?? 0.96
         hudOpacity = min(max(rawOpacity, 0.45), 1.0)
         showEstimatedCost = try container.decodeIfPresent(Bool.self, forKey: .showEstimatedCost) ?? true

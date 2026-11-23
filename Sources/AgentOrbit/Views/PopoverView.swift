@@ -50,6 +50,18 @@ final class PopoverUIState: ObservableObject {
     var resizeStartMouseY: CGFloat?
     var resizeStartHeight: CGFloat?
 
+    func cycleView(on monitor: CoordinatorMonitor) {
+        let next: ViewDensityMode = switch monitor.config.viewMode {
+        case .minimal: .compact
+        case .compact: .detailed
+        case .detailed: .minimal
+        }
+        monitor.config.viewMode = next
+        if next != .minimal, let customPinnedWidth, customPinnedWidth < 290 {
+            self.customPinnedWidth = 340
+        }
+    }
+
     func toggleUsageDetails(_ id: String) {
         if expandedUsageIDs.contains(id) {
             expandedUsageIDs.remove(id)
@@ -297,15 +309,7 @@ struct PopoverView: View {
             Spacer(minLength: 4)
 
             Button {
-                let next: ViewDensityMode = switch monitor.config.viewMode {
-                case .minimal: .compact
-                case .compact: .detailed
-                case .detailed: .minimal
-                }
-                monitor.config.viewMode = next
-                if next != .minimal, let w = uiState.customPinnedWidth, w < 290 {
-                    uiState.customPinnedWidth = 340
-                }
+                uiState.cycleView(on: monitor)
             } label: {
                 Image(systemName: viewModeIcon)
                     .font(.system(size: 11.5))

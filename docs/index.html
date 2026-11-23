@@ -642,13 +642,12 @@
           <h3 class="de">Manuelle Installation (DMG)</h3>
           <ol class="en">
             <li>Download <code>AgentOrbit.dmg</code> from GitHub Releases and drag <code>AgentOrbit.app</code> into <code>/Applications</code>.</li>
-            <li>Because releases are ad-hoc signed (not Apple-notarized), right-click → <strong>Open</strong> on first launch or clear quarantine:</li>
+            <li>Release builds are ad-hoc signed. macOS may show a security warning on first launch because Apple notarization is still to be set up.</li>
           </ol>
           <ol class="de">
             <li><code>AgentOrbit.dmg</code> aus den GitHub Releases laden und <code>AgentOrbit.app</code> in <code>/Applications</code> ziehen.</li>
-            <li>Da Releases aktuell ad-hoc signiert sind, beim Erststart Rechtsklick → <strong>Öffnen</strong> wählen oder Quarantäne entfernen:</li>
+            <li>Die Releases sind ad-hoc signiert. Die Apple-Notarisierung steht noch aus. Beim ersten Start kann macOS deshalb einen Sicherheitshinweis anzeigen.</li>
           </ol>
-          <pre>xattr -cr /Applications/AgentOrbit.app</pre>
         </div>
       </section>
 
