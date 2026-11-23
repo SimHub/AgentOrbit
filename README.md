@@ -62,10 +62,10 @@ Tell your coding agent (Codex, Antigravity, Claude Code, OpenCode, etc.):
 
 > *"Install AgentOrbit from `https://github.com/SimHub/AgentOrbit` using `scripts/install.sh` (or `--from-source` if I want a local build)."*
 
-Or run the non-interactive installer directly:
+You can also run the installer directly. It currently removes the app’s quarantine attribute. For macOS’s standard first-launch checks, use the manual DMG download below.
 
 ```zsh
-# Download latest release DMG, install to /Applications, clear quarantine & launch
+# Download the latest release, install it, and launch AgentOrbit
 curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --open
 
 # Or let an agent clone, run unit tests, compile locally from source & install
@@ -84,18 +84,15 @@ curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/inst
 
 ### Option 2 — Manual DMG Download
 
-1. Download **`AgentOrbit.dmg`** from [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases/latest) and drag `AgentOrbit.app` into `/Applications`.
-2. **First-launch Gatekeeper note:** Release builds are currently ad-hoc signed (not Apple notarized). If macOS warns that the app cannot be verified, either **Right-click → Open** in Finder or run:
+Download **`AgentOrbit.dmg`** and drag `AgentOrbit.app` into `/Applications`. [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases/latest)
 
-```zsh
-xattr -cr /Applications/AgentOrbit.app
-```
+Release builds are currently ad-hoc signed. With Apple notarization still to be set up, macOS may show a security warning on first launch.
 
-*(DE: Da die App aktuell ad-hoc signiert ist, beim Erststart ggf. per Rechtsklick → Öffnen bestätigen oder `xattr -cr /Applications/AgentOrbit.app` ausführen.)*
+*Die Releases sind derzeit ad-hoc signiert. Die Apple-Notarisierung steht noch aus. Beim ersten Start kann macOS deshalb einen Sicherheitshinweis anzeigen.*
 
-### Option 3 — Homebrew Cask Formula
+### Homebrew Cask
 
-A ready-to-use Cask formula lives in [`packaging/homebrew/Casks/agentorbit.rb`](packaging/homebrew/Casks/agentorbit.rb) (including automatic `xattr -cr` cleanup via `postflight` and release `.sha256` artifacts).
+Installation through Homebrew requires a published tap. The current cask uses the release DMG and removes the app’s quarantine attribute during installation. [AgentOrbit cask](packaging/homebrew/Casks/agentorbit.rb)
 
 ---
 
