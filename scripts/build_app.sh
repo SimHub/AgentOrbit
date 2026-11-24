@@ -279,34 +279,5 @@ touch "$APP_BUNDLE"
 echo "Built: $APP_BUNDLE"
 
 if [[ "$CREATE_DMG" == "true" ]]; then
-  DMG_PATH="$DIST_DIR/AgentOrbit.dmg"
-  DMG_WORK="$(mktemp -d "$BUILD_DIR/dmg.XXXXXX")"
-  DMG_STAGING="$DMG_WORK/staging"
-  DMG_MOUNT="$DMG_WORK/mount"
-  DMG_CANDIDATE="$DMG_WORK/AgentOrbit.dmg"
-  DMG_MOUNTED=false
-
-  cleanup_dmg() {
-    if [[ "$DMG_MOUNTED" == "true" ]]; then
-      hdiutil detach "$DMG_MOUNT" >/dev/null || return
-    fi
-    rm -rf "$DMG_WORK"
-  }
-  trap cleanup_dmg EXIT
-
-  echo "Packaging DMG..."
-  mkdir -p "$DMG_STAGING" "$DMG_MOUNT"
-  cp -R "$APP_BUNDLE" "$DMG_STAGING/"
-  ln -s /Applications "$DMG_STAGING/Applications"
-  hdiutil create -volname "AgentOrbit" -srcfolder "$DMG_STAGING" -fs APFS -format UDZO "$DMG_CANDIDATE" >/dev/null
-
-  echo "Verifying app signature inside the DMG..."
-  hdiutil attach "$DMG_CANDIDATE" -readonly -nobrowse -noautoopen -mountpoint "$DMG_MOUNT" >/dev/null
-  DMG_MOUNTED=true
-  codesign --verify --deep --strict "$DMG_MOUNT/AgentOrbit.app"
-  hdiutil detach "$DMG_MOUNT" >/dev/null
-  DMG_MOUNTED=false
-
-  mv -f "$DMG_CANDIDATE" "$DMG_PATH"
-  echo "Built DMG: $DMG_PATH"
+  zsh "$PROJECT_DIR/scripts/package_dmg.sh" "$APP_BUNDLE" "$DIST_DIR/AgentOrbit.dmg"
 fi
