@@ -370,7 +370,14 @@ pub fn parse_workspace_path(raw_json: Option<&str>) -> Option<String> {
     let uris: Vec<String> = serde_json::from_str(raw_json?).ok()?;
     let first = uris.first()?;
     if let Some(rest) = first.strip_prefix("file://") {
-        return Some(percent_decode(rest));
+        let decoded = percent_decode(rest);
+        // Handle Windows file URIs like `file:///C:/Users/...` -> `C:/Users/...`
+        let bytes = decoded.as_bytes();
+        if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':'
+        {
+            return Some(decoded[1..].to_string());
+        }
+        return Some(decoded);
     }
     Some(first.clone())
 }
@@ -853,7 +860,13 @@ mod tests {
                 [],
             )
             .unwrap();
-        let uris = format!("[\"file://{}\"]", workspace.display());
+        let uri_path = workspace.to_string_lossy().replace('\\', "/");
+        let uri = if uri_path.starts_with('/') {
+            format!("file://{uri_path}")
+        } else {
+            format!("file:///{uri_path}")
+        };
+        let uris = serde_json::to_string(&vec![uri]).unwrap();
         sum_db
             .execute(
                 "INSERT INTO conversation_summaries VALUES ('conv-1', 'Waiting Test', ?1, 'CASCADE_RUN_STATUS_RUNNING', 7, 1, '2026-11-25 10:00:00+00:00', 0)",
