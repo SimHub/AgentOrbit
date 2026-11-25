@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AgentOrbit — Lightweight macOS HUD for AI Coding Agents</title>
-  <meta name="description" content="A fast, zero-dependency macOS menu bar & floating desktop HUD for Codex, Antigravity, and custom AI coding agents." />
+  <title>AgentOrbit v2 — Cross-Platform HUD &amp; Terminal TUI for AI Coding Agents</title>
+  <meta name="description" content="Tiny, unsigned &amp; cross-platform (macOS, Linux, Windows) Desktop HUD and Glass-HUD Terminal TUI for Codex, Antigravity, Claude Code, OpenCode, and LM Studio Bionic." />
   <link rel="icon" type="image/png" href="assets/icon.png" />
   <style>
     :root {
@@ -452,24 +452,24 @@
         <div>
           <div class="pill">
             <span class="dot"></span>
-            <span class="en">macOS 14+ · Native SwiftUI · 0 Dependencies</span>
-            <span class="de">macOS 14+ · Natives SwiftUI · 0 Abhängigkeiten</span>
+            <span class="en">v2 · macOS / Linux / Windows · Rust + Tauri v2 · 0 node_modules</span>
+            <span class="de">v2 · macOS / Linux / Windows · Rust + Tauri v2 · 0 node_modules</span>
           </div>
 
-          <h1 class="en">Your AI coding agents, in one crisp desktop orbit.</h1>
-          <h1 class="de">Deine KI-Coding-Agents kompakt im Blick.</h1>
+          <h1 class="en">Your AI coding agents, in one crisp desktop &amp; terminal orbit.</h1>
+          <h1 class="de">Deine KI-Coding-Agents kompakt im HUD &amp; Terminal.</h1>
 
           <p class="subtitle en">
-            A fast, ~2 MB macOS menu bar app and floating snap-grid HUD that tracks live sessions, Git branches, models, runtime, and rate limits locally across Codex, Antigravity, and custom agents.
+            A tiny, unsigned cross-platform Desktop HUD (~8.6 MB) and Glass-HUD Terminal TUI (~2.2 MB) with Neovim navigation — tracking live mid-task status, checklists, ETA, Git branches, models, and rate-limit rings across Codex, Antigravity, Claude Code, OpenCode, and LM Studio Bionic.
           </p>
           <p class="subtitle de">
-            Schlanke (~2 MB) macOS-Menüleisten-App &amp; schwebendes Desktop-HUD mit Einrast-Raster: Live-Status, Git-Branches, Modelle, Laufzeit und Limit-Ringe lokal für Codex, Antigravity &amp; eigene Agents.
+            Schlankes, signaturfreies Cross-Platform Desktop-HUD (~8,6 MB) &amp; Glass-HUD Terminal-TUI (~2,2 MB) mit Neovim-Navigation: Live-Status, Checklisten, ETA, Git-Branches, Modelle und Limit-Ringe lokal für Codex, Antigravity, Claude Code, OpenCode &amp; LM Studio Bionic.
           </p>
 
           <div class="cta-row">
-            <a class="btn btn-primary" href="https://github.com/SimHub/AgentOrbit/releases/latest/download/AgentOrbit.dmg">
-              <span class="en">Download Universal DMG</span>
-              <span class="de">Universal-DMG laden</span>
+            <a class="btn btn-primary" href="https://github.com/SimHub/AgentOrbit/releases/latest">
+              <span class="en">Download Portable Releases</span>
+              <span class="de">Portable Releases laden</span>
             </a>
             <a class="btn btn-secondary" href="https://github.com/SimHub/AgentOrbit" target="_blank" rel="noopener">
               <span class="en">Source on GitHub</span>
@@ -478,7 +478,10 @@
           </div>
 
           <div class="meta-row">
-            <span>Apple Silicon &amp; Intel</span>
+            <span>macOS · Linux · Windows</span>
+            <span>·</span>
+            <span class="en">Unsigned &amp; Local</span>
+            <span class="de">Signaturfrei &amp; Lokal</span>
             <span>·</span>
             <span class="en">MIT Open Source</span>
             <span class="de">MIT Open Source</span>
@@ -579,88 +582,74 @@
       <section>
         <h2 class="section-title en">Designed to stay out of your way</h2>
         <h2 class="section-title de">Gemacht für paralleles Arbeiten</h2>
-        <p class="section-sub en">Built purely with Apple system frameworks — instant startup, 0% idle CPU, and full multi-workspace awareness.</p>
-        <p class="section-sub de">Rein auf Apple-Systemframeworks gebaut — sofort startklar, 0 % Idle-CPU und voller Multi-Projekt-Überblick.</p>
+        <p class="section-sub en">Shared read-only Rust core powering both a native glass Desktop HUD and a modern Neovim-style Terminal TUI — ~0% idle CPU, zero node_modules.</p>
+        <p class="section-sub de">Gemeinsamer Read-Only Rust-Core für das native Glas-Desktop-HUD und die moderne Terminal-TUI im Neovim-Stil — ~0 % Idle-CPU, null node_modules.</p>
 
         <div class="features">
           <div class="feature-card">
-            <h3 class="en">Multi-Project Live View</h3>
-            <h3 class="de">Multi-Projekt-Übersicht</h3>
-            <p class="en">See all active and recent (24h) sessions side by side with live status, active runtime timers, Git branch, model, and menu bar counter.</p>
-            <p class="de">Alle laufenden und aktuellen Sessions (24h) nebeneinander mit Status, Laufzeit-Timer, Git-Branch, Modell und Menüleisten-Counter.</p>
+            <h3 class="en">Desktop HUD + Glass-HUD TUI</h3>
+            <h3 class="de">Desktop-HUD + Glass-HUD TUI</h3>
+            <p class="en">Use the floating translucent HUD (<code>agentorbit-app</code>) or jump into <code>agentorbit tui</code> with rounded TrueColor cards, gradient bars, circular % rings, Neovim keys (<code>hjkl</code>, <code>gg/G</code>, <code>/</code>) &amp; mouse support.</p>
+            <p class="de">Nutze das transparente Desktop-HUD (<code>agentorbit-app</code>) oder <code>agentorbit tui</code> mit abgerundeten TrueColor-Karten, Gradient-Balken, %-Ringen, Neovim-Tasten (<code>hjkl</code>, <code>gg/G</code>, <code>/</code>) &amp; Maus-Steuerung.</p>
           </div>
 
           <div class="feature-card">
-            <h3 class="en">Snap-Grid Desktop HUD</h3>
-            <h3 class="de">Desktop-HUD mit Einrast-Grid</h3>
-            <p class="en">Pin anywhere via <code>⌃⌥ O</code>. Snap to a 24 pt grid and 9 screen anchors (hold <code>⌥</code> for free drag) and resize width &amp; max height from 240 pt up to 3 columns.</p>
-            <p class="de">Per <code>⌃⌥ O</code> anpinnbar, mit 24-pt-Raster &amp; 9 Ankern (<code>⌥</code> = frei) sowie stufenloser Breite &amp; Max-Höhe von 240 pt bis 3 Spalten.</p>
+            <h3 class="en">Live Mid-Task Detection &amp; Checklists</h3>
+            <h3 class="de">Sofortige Live-Erkennung &amp; Checklisten</h3>
+            <p class="en">Detects already-running tasks immediately on launch with true runtime (<code>⏱</code>), live step checklists, ETA countdowns, and a smart <code>✓ Done</code> badge that stays visible for 5 min.</p>
+            <p class="de">Erkennt bereits laufende Tasks direkt beim Start inkl. echter Laufzeit (<code>⏱</code>), Live-Checklisten, ETA-Restzeit und <code>✓ Fertig</code>-Badge (bleibt 5 Min. sichtbar).</p>
           </div>
 
           <div class="feature-card">
-            <h3 class="en">3 Densities &amp; Limit Rings</h3>
-            <h3 class="de">3 Ansichten &amp; Limit-Ringe</h3>
-            <p class="en">Switch between <em>Minimal</em>, <em>Kompakt</em>, and <em>Detail</em> with circular 5h / Weekly usage rings and optional session cost estimates.</p>
-            <p class="de">Wähle zwischen <em>Minimal</em>, <em>Kompakt</em> und <em>Detail</em> inkl. runder 5h-/Weekly-Ringe und optionaler Kosten-Schätzung.</p>
+            <h3 class="en">3 Scopes, 3 Densities &amp; Limit Rings</h3>
+            <h3 class="de">3 Scopes, 3 Ansichten &amp; Limit-Ringe</h3>
+            <p class="en">Switch between <em>Single</em>, <em>Active Only</em>, and <em>All</em> plus <em>M | K | D</em> views with auto-fitting height, circular 5h / Weekly rings, and optional <code>~$</code> cost estimates.</p>
+            <p class="de">Wechsle zwischen <em>Einzeln</em>, <em>Alle Aktiven</em> und <em>Alle</em> sowie <em>M | K | D</em> mit Live-Höhenanpassung, runden 5h-/Woche-Ringen und optionaler <code>~$</code>-Kostenschätzung.</p>
           </div>
 
           <div class="feature-card">
-            <h3 class="en">1-Click IDE Launcher</h3>
-            <h3 class="de">1-Klick-IDE-Starter</h3>
-            <p class="en">Jump straight from any card into Antigravity, VS Code, Cursor, Ghostty / Warp / iTerm / Terminal, or Finder.</p>
-            <p class="de">Direkt von jeder Karte ins passende Projekt in Antigravity, VS Code, Cursor, Terminal oder Finder springen.</p>
+            <h3 class="en">Layout-Aware Hotkeys &amp; Snap-Grid</h3>
+            <h3 class="de">Layout-bewusste Kürzel &amp; Einrast-Grid</h3>
+            <p class="en">QWERTZ/QWERTY-aware shortcut recorder with conflict detection, 24 pt snap-grid + 9 anchors, adjustable opacity (25%–100%), and 1-click IDE launcher.</p>
+            <p class="de">QWERTZ/QWERTY-Kürzel-Recorder mit Konfliktprüfung, 24-pt-Einrast-Grid + 9 Anker, Deckkraft 25 %–100 % und 1-Klick-IDE-Starter.</p>
           </div>
 
           <div class="feature-card">
             <h3 class="en">Needs-Input &amp; Completion Alerts</h3>
             <h3 class="de">Wartet- &amp; Fertig-Meldungen</h3>
-            <p class="en">Spot blocked prompts immediately with an orange badge and receive native macOS notifications when an agent needs input or transitions from Active to Idle.</p>
-            <p class="de">Erkennt sofort per orangem Badge, wenn ein Agent auf Freigabe/Antwort wartet, und benachrichtigt nativ bei Eingabe nötig oder Aktiv → Idle.</p>
+            <p class="en">Spot blocked prompts immediately with an amber badge and receive native OS notifications (+ optional sound) for input requests and task completion.</p>
+            <p class="de">Erkennt sofort per orangem Badge, wenn ein Agent auf Freigabe/Rückfrage wartet, und meldet Eingabe nötig &amp; Fertigstellung nativ (+ optionalem Ton).</p>
           </div>
 
           <div class="feature-card">
-            <h3 class="en">Zero-Config, Bilingual &amp; Claude Code</h3>
-            <h3 class="de">Zweisprachig, Zero-Config &amp; Claude Code</h3>
-            <p class="en">Auto-discovers Codex, Antigravity, Claude Code (deep JSONL + tool-use), OpenCode v2, LM Studio Bionic, and Pi — with English &amp; German UI.</p>
-            <p class="de">Erkennt Codex, Antigravity, Claude Code (inkl. Tool-Use &amp; Tokens), OpenCode v2, LM Studio Bionic &amp; Pi automatisch — komplett auf EN &amp; DE.</p>
+            <h3 class="en">Unsigned, Cross-Platform &amp; Zero-Config</h3>
+            <h3 class="de">Signaturfrei, Hybrid-OS &amp; Zero-Config</h3>
+            <p class="en">Runs natively on macOS, Linux, and Windows without App Store signing. Auto-discovers Codex, Antigravity, Claude Code, OpenCode v2, LM Studio Bionic &amp; Pi.</p>
+            <p class="de">Läuft nativ auf macOS, Linux und Windows ohne Apple-Signatur. Erkennt Codex, Antigravity, Claude Code, OpenCode v2, LM Studio Bionic &amp; Pi automatisch.</p>
           </div>
         </div>
       </section>
 
       <section class="two-col">
         <div class="panel">
-          <h3 class="en">Install via AI Agent or 1-Liner</h3>
-          <h3 class="de">Installation per AI-Agent oder 1-Zeiler</h3>
-          <p class="en">Tell your coding agent to install AgentOrbit, or run the installer directly (downloads DMG, clears quarantine, or builds locally with <code>--from-source</code>):</p>
-          <p class="de">Sag deinem Coding-Agent, er soll AgentOrbit installieren, oder starte das Setup direkt (lädt DMG, entfernt Quarantäne oder baut lokal mit <code>--from-source</code>):</p>
-          <pre>curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --open</pre>
-          <pre>curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --from-source --open</pre>
-        </div>
-
-        <div class="panel">
-          <h3 class="en">Quick Install (Manual DMG)</h3>
-          <h3 class="de">Manuelle Installation (DMG)</h3>
-          <ol class="en">
-            <li>Download <code>AgentOrbit.dmg</code> from GitHub Releases and drag <code>AgentOrbit.app</code> into <code>/Applications</code>.</li>
-            <li>Release builds are ad-hoc signed. macOS may show a security warning on first launch because Apple notarization is still to be set up.</li>
-          </ol>
-          <ol class="de">
-            <li><code>AgentOrbit.dmg</code> aus den GitHub Releases laden und <code>AgentOrbit.app</code> in <code>/Applications</code> ziehen.</li>
-            <li>Die Releases sind ad-hoc signiert. Die Apple-Notarisierung steht noch aus. Beim ersten Start kann macOS deshalb einen Sicherheitshinweis anzeigen.</li>
-          </ol>
-        </div>
-      </section>
-
-      <section>
-        <div class="panel">
-          <h3 class="en">Build from Source (no Xcode required)</h3>
-          <h3 class="de">Selbst bauen (ohne Xcode)</h3>
-          <p class="en">Requires macOS 14+ and Apple Command Line Tools (<code>xcode-select --install</code>):</p>
-          <p class="de">Benötigt macOS 14+ und die Apple Command Line Tools (<code>xcode-select --install</code>):</p>
+          <h3 class="en">Local Source Install (macOS &amp; Linux)</h3>
+          <h3 class="de">Lokale Installation (macOS &amp; Linux)</h3>
+          <p class="en">Compiles both <code>agentorbit</code> (~2.2 MB) and <code>agentorbit-app</code> (~8.6 MB) into <code>~/.local/bin</code> with zero quarantine flags:</p>
+          <p class="de">Baut <code>agentorbit</code> (~2,2 MB) und <code>agentorbit-app</code> (~8,6 MB) lokal nach <code>~/.local/bin</code> – komplett ohne Quarantäne:</p>
           <pre>git clone https://github.com/SimHub/AgentOrbit.git &amp;&amp; cd AgentOrbit
-./scripts/run_tests.sh
-./scripts/build_app.sh --universal --dmg
-open ./dist/AgentOrbit.app</pre>
+./scripts/install_v2.sh --open</pre>
+          <pre>~/.local/bin/agentorbit tui       # Glass-HUD Terminal TUI
+~/.local/bin/agentorbit-app &amp;     # Floating Desktop HUD</pre>
+        </div>
+
+        <div class="panel">
+          <h3 class="en">Portable Releases &amp; Homebrew</h3>
+          <h3 class="de">Portable Releases &amp; Homebrew</h3>
+          <p class="en">Download unsigned portable archives for macOS, Linux, or Windows from GitHub Releases, or install via Homebrew Formula:</p>
+          <p class="de">Lade die signaturfreien Portable-Archive für macOS, Linux oder Windows aus den GitHub Releases oder nutze die Homebrew Formula:</p>
+          <pre>brew install --HEAD ./packaging/homebrew/Formula/agentorbit.rb</pre>
+          <pre>cargo test --workspace
+cargo build --release --workspace</pre>
         </div>
       </section>
     </main>
