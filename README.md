@@ -18,7 +18,11 @@ A tiny, blazing-fast, **unsigned & cross-platform** (macOS, Linux, Windows) **De
 - **Releases (macOS / Linux / Windows):** https://github.com/SimHub/AgentOrbit/releases
 
 <p align="center">
-  <img src="docs/assets/hud-preview.png" width="700" alt="AgentOrbit Desktop HUD showing live, waiting, and idle AI coding agent sessions" />
+  <img src="docs/assets/hud-preview.png" width="700" alt="AgentOrbit v2 Desktop HUD showing live, done, and idle AI coding agent sessions" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/tui-preview.png" width="700" alt="AgentOrbit v2 Glass-HUD Terminal TUI with Neovim navigation, gradient bars, and rate-limit rings" />
 </p>
 
 ---
