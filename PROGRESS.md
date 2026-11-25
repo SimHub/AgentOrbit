@@ -106,9 +106,10 @@ Warum diese Kombination „klein, schnell und besser als der Vorgänger“ ist:
 - [ ] **Optionale spätere TUI-Erweiterungen:**
   - Interaktives Launcher-Popup (`L`) & Inline-Settings (`s`) direkt in der TUI + optionaler Remote-SSH/WebSocket-Stream (`agentorbitd`).
 
-### Phase 4: Signaturfreier Vertrieb & Lokale Installation
+### Phase 4: Signaturfreier Vertrieb & Lokale Installation – Abgeschlossen
 - [x] Release-Profil größenoptimiert (`opt-level = "s"`, `lto = "thin"`, `strip = true`):
   - `agentorbit` (CLI + Terminal-TUI + Watcher + bundled SQLite): **2,2 MB**
   - `agentorbit-app` (Desktop-HUD + Tray + 3-Tab-Settings + UI): **8,6 MB**
 - [x] Lokaler Source-Installer (`scripts/install_v2.sh` nach `~/.local/bin`, macOS & Linux, ohne Signatur/App Store).
-- [ ] GitHub Actions Matrix-Workflow (`macos-latest`, `ubuntu-latest`, `windows-latest`) & Homebrew Formula für `v2.0.0`.
+- [x] GitHub Actions Cross-Platform Matrix-Workflows (`.github/workflows/v2-ci.yml`, `.github/workflows/v2-release.yml` für `macos-latest`, `ubuntu-latest`, `windows-latest` – kostenlose Standard-Runner, signaturfreie Portable-Archive + SHA256).
+- [x] Signaturfreie Homebrew Formula (`packaging/homebrew/Formula/agentorbit.rb` für macOS & Linux, `--HEAD` / Source-Build ohne Quarantäne).
