@@ -2,120 +2,125 @@
   <img src="docs/assets/icon.png" width="92" height="92" alt="AgentOrbit icon" />
 </p>
 
-<h1 align="center">AgentOrbit</h1>
+<h1 align="center">AgentOrbit v2</h1>
 
 <p align="center">
-  <a href="https://github.com/SimHub/AgentOrbit/actions/workflows/ci.yml"><img src="https://github.com/SimHub/AgentOrbit/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/SimHub/AgentOrbit/actions/workflows/v2-ci.yml"><img src="https://github.com/SimHub/AgentOrbit/actions/workflows/v2-ci.yml/badge.svg" alt="CI v2" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-cyan.svg" alt="License: MIT" /></a>
-  <img src="https://img.shields.io/badge/macOS-14%2B-blue.svg" alt="macOS 14+" />
-  <img src="https://img.shields.io/badge/Dependencies-0-brightgreen.svg" alt="Zero Dependencies" />
+  <img src="https://img.shields.io/badge/OS-macOS%20%7C%20Linux%20%7C%20Windows-blue.svg" alt="macOS | Linux | Windows" />
+  <img src="https://img.shields.io/badge/CLI%2FTUI-2.2%20MB-brightgreen.svg" alt="CLI/TUI 2.2 MB" />
+  <img src="https://img.shields.io/badge/Desktop%20HUD-8.6%20MB%20(0%20node__modules)-purple.svg" alt="Desktop HUD 8.6 MB" />
 </p>
 
-A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required) macOS menu bar & floating desktop HUD for AI coding agents — reading live status, projects, Git branches, models, runtime, and usage metrics locally from **Codex**, **Antigravity**, **Claude Code**, **OpenCode**, **LM Studio Bionic**, and optional custom agents (**Pi**, etc.).
+A tiny, blazing-fast, **unsigned & cross-platform** (macOS, Linux, Windows) **Desktop HUD + Glass-HUD Terminal TUI** for AI coding agents — built in **Rust + Tauri v2** with **zero `node_modules`** and **~0% idle CPU**. Reads live status, projects, Git branches, models, live task checklists, runtime, ETA, and usage metrics strictly read-only from **Codex**, **Antigravity**, **Claude Code**, **OpenCode**, **LM Studio Bionic**, and optional custom agents (**Pi**, etc.).
 
 - **Project Page:** https://simhub.github.io/AgentOrbit/
-- **Download Latest DMG:** https://github.com/SimHub/AgentOrbit/releases/latest/download/AgentOrbit.dmg
+- **Releases (macOS / Linux / Windows):** https://github.com/SimHub/AgentOrbit/releases
 
 <p align="center">
   <img src="docs/assets/hud-preview.png" width="700" alt="AgentOrbit Desktop HUD showing live, waiting, and idle AI coding agent sessions" />
 </p>
 
-<details>
-<summary>Settings Preview (English / Deutsch / Auto)</summary>
-
-<p align="center">
-  <img src="docs/assets/settings-preview.png" width="430" alt="AgentOrbit Settings View" />
-</p>
-
-</details>
-
 ---
 
-## Features (EN)
+## Highlights (EN)
 
-- **Multi-Project Live View:** Displays all running and recent (24h) sessions side by side with live status, active runtime timer (`1m 42s`, 0% CPU when idle), and menu bar parallel-session counter.
-- **Responsive Desktop HUD & Snap-Grid:**
-  - Pin as an always-on-top desktop widget (`⌃⌥ O` global hotkey, adjustable opacity `45%–100%`).
-  - Drag freely with a live `24 pt` snap grid + 9 screen anchors (hold `⌥` for free placement).
-  - Resize in 2D (`240 pt` up to full screen width, 1–3 columns, plus adjustable max list height).
-- **3 View Densities:** `Minimal` (2-line corner widget, auto-enabled `< 290 pt`), `Kompakt`, and `Detail` (permanent usage & circular `Weekly` / `5h` rate-limit rings + reset timers).
-- **Keyboard Shortcuts:** Choose a preset or record your own shortcut for the HUD, view switching, or showing all active projects under **Settings → Display → Keyboard Shortcuts**. AgentOrbit flags conflicting assignments.
-- **1-Click Project Launcher:** Open any active project directly in **Antigravity**, **VS Code**, **Cursor**, **Terminal** (Ghostty/Warp/iTerm/Terminal), or **Finder** (plus right-click context menu).
-- **Needs-Input & Completion Notifications:** Detects when Codex, Antigravity, Claude Code, OpenCode, or LM Studio Bionic pauses for user approval or a question (`Needs input` / `Eingabe nötig` orange menu bar & HUD badge) and sends native macOS notifications (+ optional sound) for both interaction requests and `Active → Idle` completion.
-- **Zero-Config, Bilingual UI & Cost Estimate:** Auto-discovers installed agent directories (including deep Claude Code JSONL token/tool-use parsing), switches seamlessly between **English**, **Deutsch**, or **Auto (macOS)**, supports Launch at Login (`SMAppService`), and optionally displays exact/estimated session costs (`~$0.xx`).
-- **Read-Only & Symlink-Safe:** Resolves symlinks (`resolvingSymlinksInPath`) for reliable `FSEvents` even on external SSDs and reads SQLite databases strictly read-only.
+- **Two Native Interfaces, One Shared Rust Core (`agentorbit-core`):**
+  - **Desktop HUD (`agentorbit-app`, ~8.6 MB):** Frameless native glass overlay (`14 px` rounded corners, `25%–100%` opacity with low-opacity contrast boost), system tray live badge, `24 pt` snap-grid, auto-fitting window height, and 3-tab settings (`Display | Agents | Folders`).
+  - **Glass-HUD Terminal TUI (`agentorbit tui`, ~2.2 MB):** TrueColor rounded session cards (1–2 responsive columns), `M | K | D` segmented toggle, centered gradient context bars, visual circular `%` rate-limit rings, **Neovim-style navigation** (`h/j/k/l`, `gg`/`G`, `Ctrl+d`/`Ctrl+u`, `/` live search) + full **mouse click/scroll** support.
+- **Instant Live Mid-Task Detection:** Immediately detects already-running tasks on launch with their true elapsed runtime (`⏱`) and live `ETA ~…` — no need to start a new task first.
+- **Live Agent Checklists & Smart `✓ Done`:** Extracts live step checklists (`update_steps`, `update_plan`, `TodoWrite`) and recently edited files/commands, resets automatically on new turns, and keeps newly finished tasks visible for 5 minutes in `Active Only` mode.
+- **3-Mode Project Scope & Colored Badges:** Switch between `Single`, `Active Only`, and `All` (`a` in TUI or configurable global hotkey in HUD), with color-coded agent (`AG`/`CX`/`CL`/`OC`/`LM`/`PI`) and model-family badges (Gemini, Claude, GPT/Codex, Local).
+- **Layout-Aware Global Hotkeys & Notifications:** Supports QWERTZ/QWERTY keyboard layouts with conflict detection, native notifications (`Needs Input` & `Active → Done` with optional sound), and 1-click project launching.
+- **Unsigned, Local & Read-Only:** No Apple Developer ID or App Store signing required. SQLite databases are opened strictly read-only; symlinks are resolved recursively for reliable watching even on external SSDs.
 
 ## Funktionen (DE)
 
-- **Multi-Projekt-Übersicht:** Zeigt alle parallelen und aktuellen Sessions mit Projekt, Live-Git-Branch, Modell + Stärke, Laufzeit-Timer und Menüleisten-Counter.
-- **Desktop-HUD mit Einrast-Grid:** Anpinnbar (`⌃⌥ O`), stufenlos in Breite & Max-Höhe skalierbar (`240 pt` bis Bildschirmbreite, 1–3 Spalten) mit `24 pt`-Raster & 9 Bildschirm-Ankern (`⌥` = frei platzieren) sowie einstellbarer Deckkraft.
-- **3 Ansichts-Stufen:** `Minimal`, `Kompakt`, `Detail` (inkl. runder `Weekly`/`5h`-Limit-Ringe und optionaler `~$`-Kosten-Schätzung).
-- **Tastenkürzel:** Unter **Einstellungen → Anzeige → Tastenkürzel** kannst du Presets oder eigene Kombinationen für das HUD, den Ansichtswechsel und „Alle aktiven Projekte zeigen“ wählen. AgentOrbit meldet doppelte Belegungen.
-- **1-Klick-IDE-Starter, Wartet- & Fertig-Meldung:** Zeigt per orangem Badge + Mitteilung, sobald ein Agent auf deine Freigabe/Rückfrage wartet (`Eingabe nötig`) oder mit `Aktiv → Idle` fertig ist, und öffnet Projekte direkt im passenden Editor/Terminal.
-- **Zweisprachig (EN/DE), Zero-Config & Erweiterbar:** Auto-Discovery beim Erststart (inkl. tiefem Claude Code JSONL-Support, OpenCode v2, LM Studio Bionic, Pi), umschaltbare Sprache (`Auto` / `English` / `Deutsch`) und „Bei Anmeldung starten“.
+- **Zwei native Oberflächen, ein gemeinsamer Rust-Core (`agentorbit-core`):**
+  - **Desktop-HUD (`agentorbit-app`, ~8,6 MB):** Transparenter macOS-Glas-Look (`25%–100%` Deckkraft inkl. Kontrast-Boost), System-Tray mit Live-Badge, `24 pt`-Einrast-Grid, intelligente Live-Fensterhöhe und 3-Tab-Einstellungen (`Anzeige | Agents | Ordner`).
+  - **Glass-HUD Terminal-TUI (`agentorbit tui`, ~2,2 MB):** Abgerundete TrueColor-Session-Karten (1–2 Spalten), `M | K | D`-Ansicht, mittige Gradient-Kontext-Balken, visuelle `%`-Ringe, **Neovim-Navigation** (`h/j/k/l`, `gg`/`G`, `Ctrl+d`/`Ctrl+u`, `/` Live-Suche) + volle **Maus-Steuerung**.
+- **Sofortige Live-Erkennung laufender Tasks:** Erkennt bereits laufende Tasks direkt beim Start inkl. echter bisheriger Laufzeit (`⏱`) und `ETA ~…` – ohne erst einen neuen Task starten zu müssen.
+- **Live-Checklisten & intelligentes `✓ Fertig`:** Zeigt Fortschritte aus Antigravity, Codex und Claude Code in Echtzeit an, räumt bei neuen Tasks automatisch auf und hält gerade abgeschlossene Tasks 5 Min. lang in `Alle Aktiven` sichtbar.
+- **3-stufiger Projekt-Scope & farbige Badges:** `Einzeln`, `Alle Aktiven` oder `Alle`, mit farbigen Agent- & Modell-Badges, zweisprachiger UI (`Auto` / `DE` / `EN`) und optionaler `~$`-Kostenschätzung.
+- **Signaturfrei & Read-Only:** Läuft komplett lokal ohne Apple-Signatur/Quarantäne auf macOS, Linux und Windows.
 
 ---
 
-## Install (macOS 14+)
+## Install (Signaturfrei / Unsigned)
 
-### Option 1 — Ask Your AI Agent (or Run 1 Command)
+### Option 1 — Local Source Install (macOS & Linux, Recommended)
 
-Tell your coding agent (Codex, Antigravity, Claude Code, OpenCode, etc.):
-
-> *"Install AgentOrbit from `https://github.com/SimHub/AgentOrbit` using `scripts/install.sh` (or `--from-source` if I want a local build)."*
-
-You can also run the installer directly. It currently removes the app’s quarantine attribute. For macOS’s standard first-launch checks, use the manual DMG download below.
+Builds both `agentorbit` (CLI + TUI) and `agentorbit-app` (Desktop HUD) locally into `~/.local/bin` — **zero quarantine flags, zero Node.js, zero Xcode**:
 
 ```zsh
-# Download the latest release, install it, and launch AgentOrbit
-curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --open
-
-# Or let an agent clone, run unit tests, compile locally from source & install
-curl -fsSL https://raw.githubusercontent.com/SimHub/AgentOrbit/main/scripts/install.sh | zsh -s -- --from-source --open
+./scripts/install_v2.sh --open
 ```
 
-<details>
-<summary>Installer options (<code>scripts/install.sh</code>)</summary>
+Launch anytime:
 
-- `--from-source`: Clones (or uses the current repo), runs `./scripts/run_tests.sh`, compiles locally via `./scripts/build_app.sh`, and installs `AgentOrbit.app` without needing Xcode.
-- `--universal`: Together with `--from-source`, builds a universal (`arm64` + `x86_64`) binary.
-- `--dir <path>`: Custom target folder (defaults to `/Applications`, or `~/Applications` if `/Applications` is not writable).
-- `--open`: Launches `AgentOrbit.app` immediately after installation.
+```zsh
+~/.local/bin/agentorbit tui       # Glass-HUD Terminal TUI
+~/.local/bin/agentorbit-app &     # Floating Desktop HUD + System Tray
+```
 
-</details>
+### Option 2 — Homebrew Formula (macOS & Linux)
 
-### Option 2 — Manual DMG Download
+```zsh
+brew install --HEAD ./packaging/homebrew/Formula/agentorbit.rb
+```
 
-Download **`AgentOrbit.dmg`** and drag `AgentOrbit.app` into `/Applications`. [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases/latest)
+### Option 3 — Portable Binaries (macOS / Linux / Windows)
 
-Release builds are currently ad-hoc signed. With Apple notarization still to be set up, macOS may show a security warning on first launch.
-
-*Die Releases sind derzeit ad-hoc signiert. Die Apple-Notarisierung steht noch aus. Beim ersten Start kann macOS deshalb einen Sicherheitshinweis anzeigen.*
+Download the portable archive for your OS from [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases) (includes `agentorbit` + `agentorbit-app` + `.sha256` checksum).
 
 ---
 
-## Build, Test & Release (Command Line Tools only)
+## Terminal TUI Keybindings (`agentorbit tui`)
+
+| Keys / Input | Action |
+| :--- | :--- |
+| `h` `j` `k` `l` or `←` `↓` `↑` `→` | 2D card navigation (Neovim style) |
+| `gg` / `G` | Jump to first / last card |
+| `Ctrl+d` / `Ctrl+u` | Half-page down / up |
+| `/` | Live search (project, agent, model, branch) · `Esc` clears |
+| `Enter` / `Space` / `o` | Open selected project in configured editor |
+| `a` | Cycle Scope (`Single` / `Active` / `All`) |
+| `f` or `1` / `2` / `3` | Filter (`All` / `Active` / `Needs Input`) |
+| `m` / `c` / `d` | View density (`Minimal` / `Compact` / `Detail`) |
+| `r` | Manual refresh |
+| `q` / `Esc` | Quit |
+| **Mouse** | Click card to select · Double-click to open · Scroll wheel · Click `M`/`K`/`D` & Scope |
+
+Headless CLI commands: `agentorbit scan`, `agentorbit scan --json`, `agentorbit watch`, `agentorbit branch`.
+
+---
+
+## Build & Test from Source
+
+Requires only a standard [Rust toolchain](https://rustup.rs/) (`cargo`) — no `npm` / `node_modules`:
 
 ```zsh
-# Run unit tests
-./scripts/run_tests.sh
+# Run all unit tests (synthetic temp fixtures only)
+cargo test --workspace
 
-# Fast, small single-arch build (~2 MB)
-./scripts/build_app.sh
-open ./dist/AgentOrbit.app
+# Build size-optimized release binaries
+cargo build --release --workspace
 
-# Universal Binary (arm64 + x86_64) and DMG installer
-./scripts/build_app.sh --universal --dmg
+# Output:
+#   target/release/agentorbit      (~2.2 MB: CLI + Glass-HUD TUI)
+#   target/release/agentorbit-app  (~8.6 MB: Desktop HUD + Tray)
 ```
 
-Optional build environment overrides:
+*(On Linux, install Tauri v2 system libs first: `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`.)*
 
-```zsh
-AGENTORBIT_BUNDLE_ID=dev.agentorbit.AgentOrbit AGENTORBIT_VERSION=1.0.0 ./scripts/build_app.sh
-```
+---
 
-> [!NOTE]
-> Uses only Apple system frameworks (`SwiftUI`, `AppKit`, `CoreServices`, `SQLite3`, `UserNotifications`, `Carbon`, `ServiceManagement`) — no Xcode project or external packages required.
+## Architecture
+
+- [`crates/agentorbit-core`](crates/agentorbit-core): Shared read-only Rust core (Codex, Antigravity, Claude Code, OpenCode v2, LM Studio Bionic, Git branch detection, `CostEstimator`, `OrbitConfig`, `notify` file watcher).
+- [`crates/agentorbit-cli`](crates/agentorbit-cli): CLI + `ratatui` Glass-HUD Terminal TUI.
+- [`src-tauri`](src-tauri) & [`ui`](ui): Zero-bundler Tauri v2 native desktop shell + Vanilla HTML/CSS/JS glass HUD.
+- Legacy macOS-only Swift v1 remains preserved on the `v1.x` release history.
 
 ---
 
