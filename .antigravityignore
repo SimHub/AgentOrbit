@@ -2,6 +2,7 @@
 .build/
 .swiftpm/
 target/
+src-tauri/gen/
 DerivedData/
 *.xcodeproj/
 *.xcworkspace/

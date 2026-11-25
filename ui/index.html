@@ -8,28 +8,294 @@
   </head>
   <body>
     <div id="hud-shell" class="hud-shell">
-      <header class="hud-header" data-tauri-drag-region>
+      <!-- Clean macOS Toolbar -->
+      <header id="hud-header" class="hud-header" data-tauri-drag-region>
         <div class="brand" data-tauri-drag-region>
-          <span id="status-orb" class="orb idle"></span>
-          <span class="title">AgentOrbit</span>
+          <span class="orbit-glyph" data-tauri-drag-region>
+            <span id="status-orb" class="orb idle"></span>
+            <span id="status-ring" class="orb-ring idle"></span>
+          </span>
+          <div class="brand-text" data-tauri-drag-region>
+            <span class="title">AgentOrbit</span>
+            <span id="header-sub" class="header-sub">Echtzeit · Bereit</span>
+          </div>
           <span id="live-badge" class="badge hidden">0</span>
         </div>
+
         <div class="controls">
-          <button id="density-btn" class="icon-btn" title="Ansicht wechseln">K</button>
-          <button id="lang-btn" class="icon-btn" title="Sprache DE/EN">DE</button>
-          <button id="refresh-btn" class="icon-btn" title="Aktualisieren">↻</button>
-          <button id="hide-btn" class="icon-btn" title="Ausblenden">✕</button>
+          <div class="mini-seg" title="Ansicht: Mini-Preview (M) · Kompakt (K) · Detail (D)">
+            <button class="mini-seg-btn quick-density" data-density="minimal">M</button>
+            <button class="mini-seg-btn quick-density active" data-density="compact">K</button>
+            <button class="mini-seg-btn quick-density" data-density="detail">D</button>
+          </div>
+          <button id="autosize-btn" class="tool-btn" title="Auto-Größe">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
+          <button id="refresh-btn" class="tool-btn" title="Aktualisieren (⌘R)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+          <button id="settings-btn" class="tool-btn" title="Einstellungen">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+          <button id="hide-btn" class="tool-btn close-btn" title="Ausblenden">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
         </div>
       </header>
 
-      <main id="session-list" class="session-list density-compact"></main>
+      <!-- MAIN HUD VIEW -->
+      <div id="hud-view" class="view-pane">
+        <nav id="filter-bar" class="filter-bar">
+          <div class="segmented-control">
+            <button class="seg-btn filter-opt active" data-filter="all" title="Alle Sessions">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+              <span id="cnt-all" class="seg-cnt">0</span>
+            </button>
+            <button class="seg-btn filter-opt" data-filter="active" title="Aktive Sessions">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span id="cnt-active" class="seg-cnt">0</span>
+            </button>
+            <button class="seg-btn filter-opt" data-filter="needs_input" title="Eingabe nötig">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span id="cnt-input" class="seg-cnt">0</span>
+            </button>
+          </div>
 
-      <footer class="hud-footer">
-        <span id="footer-status" class="footer-status">Bereit</span>
-        <label class="opacity-control" title="Deckkraft">
-          <input id="opacity-slider" type="range" min="45" max="100" value="92" />
-        </label>
-      </footer>
+          <div class="quick-kpis">
+            <span class="kpi-chip" title="Idle">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <span id="kpi-val-idle">0</span>
+            </span>
+            <span class="kpi-chip violet" title="Geschätzte Kosten">
+              <span id="kpi-val-cost">—</span>
+            </span>
+          </div>
+        </nav>
+
+        <main id="session-list" class="session-list density-compact cols-1"></main>
+
+        <footer class="hud-footer">
+          <span id="footer-status" class="footer-live"><span class="live-dot"></span>Live</span>
+          <span id="footer-kbd" class="footer-kbd">⌃⌥O · ⌘R</span>
+        </footer>
+      </div>
+
+      <!-- FULL 3-TAB macOS SETTINGS VIEW (matching v1.3.2 screenshot) -->
+      <div id="settings-view" class="view-pane hidden">
+        <div class="settings-tabs">
+          <button class="tab-btn active" data-tab="display">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            <span id="tab-lbl-display">Anzeige</span>
+          </button>
+          <button class="tab-btn" data-tab="agents">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>
+            <span id="tab-lbl-agents">Agents</span>
+          </button>
+          <button class="tab-btn" data-tab="folders">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span id="tab-lbl-folders">Ordner</span>
+          </button>
+        </div>
+
+        <div class="settings-scroll">
+          <!-- TAB 1: ANZEIGE -->
+          <div id="tab-display" class="tab-panel">
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico blue">✦</span><span id="sec-appearance">Darstellung</span></div>
+              <div class="pref-row">
+                <span id="lbl-density">Ansicht</span>
+                <div class="mac-seg">
+                  <button class="mac-seg-btn density-opt" data-density="minimal">Minimal</button>
+                  <button class="mac-seg-btn density-opt active" data-density="compact">Kompakt</button>
+                  <button class="mac-seg-btn density-opt" data-density="detail">Detail</button>
+                </div>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-tray">Menüleiste</span>
+                <div class="mac-seg">
+                  <button class="mac-seg-btn tray-opt" data-tray="icon">Nur Icon</button>
+                  <button class="mac-seg-btn tray-opt active" data-tray="project">Projekt</button>
+                  <button class="mac-seg-btn tray-opt" data-tray="project_model">Projekt · Model</button>
+                </div>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-lang">Sprache</span>
+                <div class="mac-seg">
+                  <button class="mac-seg-btn lang-opt active" data-lang="auto">Auto</button>
+                  <button class="mac-seg-btn lang-opt" data-lang="en">English</button>
+                  <button class="mac-seg-btn lang-opt" data-lang="de">Deutsch</button>
+                </div>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-opacity">HUD-Deckkraft</span>
+                <div class="slider-wrap">
+                  <input id="opacity-slider" class="mac-slider" type="range" min="25" max="100" value="94" />
+                  <span id="opacity-val" class="mono">94%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico cyan">⊞</span><span id="sec-workspace">Workspace & Steuerung</span></div>
+              <div class="pref-row">
+                <span id="lbl-ctx-bar">Kontext-Balken</span>
+                <div class="mac-seg">
+                  <button class="mac-seg-btn ctx-opt active" data-ctx="0">Auto</button>
+                  <button class="mac-seg-btn ctx-opt" data-ctx="200000">200k</button>
+                  <button class="mac-seg-btn ctx-opt" data-ctx="500000">500k</button>
+                  <button class="mac-seg-btn ctx-opt" data-ctx="1000000">1M</button>
+                  <button class="mac-seg-btn ctx-opt" data-ctx="-1">Aus</button>
+                </div>
+              </div>
+              <div class="pref-row">
+                <label for="launcher-select" id="lbl-launcher">Starter</label>
+                <select id="launcher-select" class="mac-select">
+                  <option value="auto">Auto (passend)</option>
+                  <option value="antigravity">Antigravity</option>
+                  <option value="vscode">VS Code</option>
+                  <option value="cursor">Cursor</option>
+                  <option value="terminal">Terminal</option>
+                  <option value="finder">Finder / Dateien</option>
+                </select>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-scope">Projekte anzeigen</span>
+                <div class="mac-seg">
+                  <button class="mac-seg-btn scope-opt" data-scope="single">Einzeln</button>
+                  <button class="mac-seg-btn scope-opt" data-scope="active">Alle Aktiven</button>
+                  <button class="mac-seg-btn scope-opt active" data-scope="all">Alle</button>
+                </div>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-snap">Einrast-Grid beim Ziehen (⌥ = Frei)</span>
+                <label class="mac-switch"><input id="snap-checkbox" type="checkbox" checked /><span></span></label>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-show-cost">Kosten-Schätzung (~$)</span>
+                <label class="mac-switch"><input id="cost-checkbox" type="checkbox" checked /><span></span></label>
+              </div>
+            </div>
+
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico indigo">⌘</span><span id="sec-shortcuts">Tastenkürzel</span></div>
+              <div id="hk-conflict-banner" class="conflict-banner hidden"></div>
+              <div class="pref-row hk-row" data-hk="hotkey_hud">
+                <span id="lbl-hk-hud">HUD ein- und ausblenden</span>
+                <div class="hk-controls">
+                  <select id="hk-hud-select" class="mac-select">
+                    <option value="ctrl+alt+o">⌃⌥ O</option>
+                    <option value="alt+space">⌥ Space</option>
+                    <option value="ctrl+shift+o">⌃⇧ O</option>
+                    <option value="off">Aus</option>
+                  </select>
+                  <button class="rec-btn" data-hk="hotkey_hud" title="Eigenes Kürzel aufnehmen">Aufnehmen</button>
+                </div>
+              </div>
+              <div class="pref-row hk-row" data-hk="hotkey_density">
+                <span id="lbl-hk-density">Ansicht wechseln</span>
+                <div class="hk-controls">
+                  <select id="hk-density-select" class="mac-select">
+                    <option value="off">Aus</option>
+                    <option value="ctrl+alt+v">⌃⌥ V</option>
+                    <option value="alt+shift+a">⌥⇧ A</option>
+                    <option value="ctrl+shift+v">⌃⇧ V</option>
+                  </select>
+                  <button class="rec-btn" data-hk="hotkey_density" title="Eigenes Kürzel aufnehmen">Aufnehmen</button>
+                </div>
+              </div>
+              <div class="pref-row hk-row" data-hk="hotkey_active">
+                <span id="lbl-hk-active">Alle aktiven Projekte zeigen</span>
+                <div class="hk-controls">
+                  <select id="hk-active-select" class="mac-select">
+                    <option value="off">Aus</option>
+                    <option value="ctrl+alt+a">⌃⌥ A</option>
+                    <option value="alt+shift+o">⌥⇧ O</option>
+                    <option value="ctrl+shift+a">⌃⇧ A</option>
+                  </select>
+                  <button class="rec-btn" data-hk="hotkey_active" title="Eigenes Kürzel aufnehmen">Aufnehmen</button>
+                </div>
+              </div>
+              <div class="pref-row hk-row" data-hk="hotkey_mini">
+                <span id="lbl-hk-mini">Mini-Preview ein-/ausblenden</span>
+                <div class="hk-controls">
+                  <select id="hk-mini-select" class="mac-select">
+                    <option value="off">Aus</option>
+                    <option value="ctrl+alt+m">⌃⌥ M</option>
+                    <option value="alt+shift+m">⌥⇧ M</option>
+                  </select>
+                  <button class="rec-btn" data-hk="hotkey_mini" title="Eigenes Kürzel aufnehmen">Aufnehmen</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico emerald">🔔</span><span id="sec-notify">Mitteilungen & Start</span></div>
+              <div class="pref-row">
+                <span id="lbl-notify-done">Fertig-Meldung (Aktiv → Idle)</span>
+                <div class="row-right-inline">
+                  <label class="sound-check"><input id="notify-sound-checkbox" type="checkbox" /> <span id="lbl-sound">Ton</span></label>
+                  <label class="mac-switch"><input id="notify-done-checkbox" type="checkbox" checked /><span></span></label>
+                </div>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-notify-in">Eingabe nötig (Freigabe / Rückfrage)</span>
+                <label class="mac-switch"><input id="notify-input-checkbox" type="checkbox" checked /><span></span></label>
+              </div>
+              <div class="pref-row">
+                <span id="lbl-autostart">Bei Anmeldung starten</span>
+                <label class="mac-switch"><input id="autostart-checkbox" type="checkbox" /><span></span></label>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 2: AGENTS -->
+          <div id="tab-agents" class="tab-panel hidden">
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico blue">◎</span><span>Auto-Discovery</span></div>
+              <div id="discovered-agents-list" class="discovered-list"></div>
+            </div>
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico violet">+</span><span id="lbl-custom">Custom Agent hinzufügen</span></div>
+              <div class="custom-form">
+                <input id="custom-name" class="mac-input" type="text" placeholder="Name (z.B. Pi)" />
+                <input id="custom-path" class="mac-input" type="text" placeholder="Pfad (z.B. ~/.pi/agent)" />
+                <button id="add-custom-btn" class="mac-primary-btn">+</button>
+              </div>
+              <div id="custom-list" class="custom-list"></div>
+            </div>
+          </div>
+
+          <!-- TAB 3: ORDNER -->
+          <div id="tab-folders" class="tab-panel hidden">
+            <div class="pref-card">
+              <div class="pref-card-head"><span class="pref-ico cyan">📁</span><span id="lbl-folders">Überwachte Projekt-Ordner</span></div>
+              <div class="folder-form">
+                <input id="folder-path" class="mac-input" type="text" placeholder="Ordnerpfad (z.B. ~/Projects/App)" />
+                <button id="add-folder-btn" class="mac-primary-btn">+</button>
+              </div>
+              <div id="folder-list" class="custom-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="settings-footer">
+          <button id="settings-autosize-btn" class="mac-secondary-btn">Auto-Größe</button>
+          <span class="version-tag">AgentOrbit v2.0</span>
+          <button id="settings-done-btn" class="mac-primary-btn">Fertig</button>
+        </footer>
+      </div>
+
+      <!-- Right-Click Launcher Context Menu -->
+      <div id="context-menu" class="context-menu hidden">
+        <button data-target="antigravity">Antigravity</button>
+        <button data-target="vscode">VS Code</button>
+        <button data-target="cursor">Cursor</button>
+        <button data-target="terminal">Terminal</button>
+        <button data-target="finder">Finder / Dateien</button>
+      </div>
     </div>
     <script src="app.js"></script>
   </body>

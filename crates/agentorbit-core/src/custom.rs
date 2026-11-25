@@ -1,6 +1,6 @@
 use crate::models::{
     now_epoch_secs, system_time_to_epoch, AgentKind, AgentRunState, AgentSnapshot,
-    CustomAgentConfig, UsageMetrics, WatchedFolderStatus,
+    CustomAgentConfig, TaskStep, TaskStepStatus, UsageMetrics, WatchedFolderStatus,
 };
 use crate::paths::{detect_git_branch, expand_tilde, project_display_name, resolve_path};
 use crate::sqlite::open_readonly;
@@ -109,6 +109,8 @@ pub fn read_custom_sessions(
         resolved_source_path: Some(root_str),
         status_message: mtime.is_none().then(|| "No activity yet".to_string()),
         interaction_reason: None,
+        task_steps: Vec::new(),
+        recent_activity: Vec::new(),
     }]
 }
 
@@ -130,6 +132,8 @@ fn custom_placeholder(label: &str, state: AgentRunState, message: Option<String>
         resolved_source_path: None,
         status_message: message,
         interaction_reason: None,
+        task_steps: Vec::new(),
+        recent_activity: Vec::new(),
     }
 }
 
@@ -294,10 +298,16 @@ fn read_opencode_db(
             session_title: title,
             usage,
             last_updated_epoch: last_updated,
-            active_since_epoch: None,
+            active_since_epoch: if state.is_active_or_waiting() {
+                busy_at.or(last_updated)
+            } else {
+                None
+            },
             resolved_source_path: source_dir,
             status_message: None,
             interaction_reason,
+            task_steps: Vec::new(),
+            recent_activity: Vec::new(),
         });
 
         if results.len() >= limit {
@@ -607,6 +617,8 @@ fn read_bionic_sessions(
                 resolved_source_path: db_path.parent().map(|p| p.to_string_lossy().into_owned()),
                 status_message: None,
                 interaction_reason,
+                task_steps: Vec::new(),
+                recent_activity: Vec::new(),
             });
         }
     }
@@ -847,6 +859,8 @@ fn read_recent_jsonl_sessions(
             resolved_source_path: Some(root.to_string_lossy().into_owned()),
             status_message: None,
             interaction_reason: parsed.interaction_reason,
+            task_steps: parsed.task_steps,
+            recent_activity: Vec::new(),
         });
 
         if results.len() >= limit {
@@ -905,6 +919,7 @@ pub struct JsonlTailInfo {
     pub context_window: Option<u64>,
     pub state: AgentRunState,
     pub interaction_reason: Option<String>,
+    pub task_steps: Vec<TaskStep>,
 }
 
 fn parse_jsonl_tail(path: &Path, age: i64) -> JsonlTailInfo {
@@ -924,6 +939,7 @@ fn parse_jsonl_tail(path: &Path, age: i64) -> JsonlTailInfo {
             AgentRunState::Idle
         },
         interaction_reason: None,
+        task_steps: Vec::new(),
     };
 
     let Ok(mut file) = File::open(path) else {
@@ -932,7 +948,7 @@ fn parse_jsonl_tail(path: &Path, age: i64) -> JsonlTailInfo {
     let Ok(file_size) = file.seek(SeekFrom::End(0)) else {
         return fallback();
     };
-    let offset = file_size.saturating_sub(65_536);
+    let offset = file_size.saturating_sub(196_608);
     if file.seek(SeekFrom::Start(offset)).is_err() {
         return fallback();
     }
@@ -962,6 +978,8 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
     let mut pending_tools: HashMap<String, String> = HashMap::new();
     let mut pending_order: Vec<String> = Vec::new();
     let mut has_open_assistant_turn = false;
+    let mut has_open_user_prompt = false;
+    let mut task_steps: Vec<TaskStep> = Vec::new();
 
     for line in lines {
         let Ok(json) = serde_json::from_str::<Value>(line) else {
@@ -1031,8 +1049,12 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
             let stop_reason = msg.get("stop_reason").and_then(Value::as_str);
             if entry_type == Some("assistant") {
                 has_open_assistant_turn = stop_reason.is_none() || stop_reason == Some("tool_use");
+                if stop_reason == Some("end_turn") {
+                    has_open_user_prompt = false;
+                }
             } else if entry_type == Some("user") {
                 has_open_assistant_turn = false;
+                has_open_user_prompt = true;
             }
 
             if let Some(content) = msg.get("content").and_then(Value::as_array) {
@@ -1044,6 +1066,40 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
                             block.get("id").and_then(Value::as_str),
                             block.get("name").and_then(Value::as_str),
                         ) {
+                            if name == "TodoWrite" {
+                                if let Some(todos) = block
+                                    .get("input")
+                                    .and_then(|i| i.get("todos"))
+                                    .and_then(Value::as_array)
+                                {
+                                    let parsed: Vec<TaskStep> = todos
+                                        .iter()
+                                        .filter_map(|t| {
+                                            let title =
+                                                t.get("content").and_then(Value::as_str)?.trim();
+                                            if title.is_empty() {
+                                                return None;
+                                            }
+                                            let status = match t
+                                                .get("status")
+                                                .and_then(Value::as_str)
+                                                .unwrap_or("")
+                                            {
+                                                "completed" | "done" => TaskStepStatus::Done,
+                                                "in_progress" => TaskStepStatus::InProgress,
+                                                _ => TaskStepStatus::Pending,
+                                            };
+                                            Some(TaskStep {
+                                                title: title.to_string(),
+                                                status,
+                                            })
+                                        })
+                                        .collect();
+                                    if !parsed.is_empty() {
+                                        task_steps = parsed;
+                                    }
+                                }
+                            }
                             pending_tools.insert(id.to_string(), name.to_string());
                             pending_order.push(id.to_string());
                         }
@@ -1058,6 +1114,7 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
                 if saw_user_text {
                     pending_tools.clear();
                     pending_order.clear();
+                    task_steps.clear();
                 }
             }
 
@@ -1065,6 +1122,7 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
                 pending_tools.clear();
                 pending_order.clear();
                 has_open_assistant_turn = false;
+                has_open_user_prompt = false;
             }
         }
     }
@@ -1075,13 +1133,26 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
         .find_map(|id| pending_tools.get(id))
         .map(String::as_str);
 
+    let is_approval_gated_tool = |name: &str| {
+        let lower = name.to_lowercase();
+        if lower.contains("image")
+            || lower.contains("generate")
+            || lower.contains("search")
+            || lower.contains("fetch")
+            || matches!(name, "Agent" | "Task" | "Read" | "Glob" | "Grep" | "TodoWrite")
+        {
+            return false;
+        }
+        true
+    };
+
     let (state, interaction_reason) = if unresolved_tool == Some("AskUserQuestion") && age < 86_400
     {
         (AgentRunState::NeedsInput, Some("Rückfrage".to_string()))
-    } else if unresolved_tool.is_some() && (10..7_200).contains(&age) {
+    } else if unresolved_tool.is_some_and(is_approval_gated_tool) && (10..7_200).contains(&age) {
         (AgentRunState::NeedsInput, Some("Freigabe nötig".to_string()))
-    } else if (unresolved_tool.is_some() && age < 10)
-        || (has_open_assistant_turn && age < 25)
+    } else if (unresolved_tool.is_some() && age < 1_800)
+        || ((has_open_assistant_turn || has_open_user_prompt) && age < 600)
         || age < 20
     {
         (AgentRunState::Running, None)
@@ -1118,6 +1189,7 @@ pub fn parse_claude_jsonl(text: &str, dropped_partial_first: bool, age: i64) -> 
         context_window,
         state,
         interaction_reason,
+        task_steps,
     }
 }
 

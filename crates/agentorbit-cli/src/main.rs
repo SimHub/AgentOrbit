@@ -1,6 +1,8 @@
+mod tui;
+
 use agentorbit_core::{
-    detect_git_branch, estimate_cost, resolve_path, scan_discovered_agents, watch_paths_for,
-    AgentSnapshot, OrbitWatcher,
+    default_config_path, detect_git_branch, estimate_cost, load_config_from, resolve_path,
+    scan_agents_with_config, watch_paths_for, AgentSnapshot, OrbitWatcher,
 };
 use std::env;
 use std::time::Duration;
@@ -11,6 +13,11 @@ fn main() {
     let as_json = args.iter().any(|a| a == "--json");
 
     match subcmd {
+        "tui" => {
+            if let Err(err) = tui::run_tui() {
+                eprintln!("AgentOrbit TUI error: {err}");
+            }
+        }
         "branch" => {
             let target = args.get(2).map(String::as_str).unwrap_or(".");
             let resolved = resolve_path(target);
@@ -19,7 +26,8 @@ fn main() {
             println!("Branch: {}", branch);
         }
         "watch" => {
-            let (discovered, snapshots) = scan_discovered_agents(8);
+            let cfg = load_config_from(&default_config_path());
+            let (discovered, snapshots) = scan_agents_with_config(&cfg, 8);
             render_snapshots(&snapshots, as_json);
             let paths = watch_paths_for(&discovered);
             let Ok(mut watcher) = OrbitWatcher::start(&paths, Duration::from_millis(300)) else {
@@ -28,13 +36,15 @@ fn main() {
             };
             loop {
                 if watcher.wait_for_change(Duration::from_secs(5)) {
-                    let (_, updated) = scan_discovered_agents(8);
+                    let cfg = load_config_from(&default_config_path());
+                    let (_, updated) = scan_agents_with_config(&cfg, 8);
                     render_snapshots(&updated, as_json);
                 }
             }
         }
         _ => {
-            let (_, snapshots) = scan_discovered_agents(8);
+            let cfg = load_config_from(&default_config_path());
+            let (_, snapshots) = scan_agents_with_config(&cfg, 8);
             render_snapshots(&snapshots, as_json);
         }
     }

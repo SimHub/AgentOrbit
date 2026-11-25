@@ -1,6 +1,6 @@
 use crate::models::{
-    now_epoch_secs, system_time_to_epoch, AgentKind, AgentRunState, AgentSnapshot, UsageMetrics,
-    WatchedFolderStatus,
+    now_epoch_secs, system_time_to_epoch, AgentKind, AgentRunState, AgentSnapshot, TaskStep,
+    TaskStepStatus, UsageMetrics, WatchedFolderStatus,
 };
 use crate::paths::{detect_git_branch, expand_tilde, project_display_name, resolve_path};
 use crate::sqlite::open_readonly;
@@ -80,6 +80,8 @@ pub fn read_antigravity_sessions(
             resolved_source_path: Some(resolved_root.to_string_lossy().into_owned()),
             status_message: Some("No active conversation".to_string()),
             interaction_reason: None,
+            task_steps: Vec::new(),
+            recent_activity: Vec::new(),
         }];
     }
 
@@ -153,6 +155,10 @@ pub fn read_antigravity_sessions(
             ..Default::default()
         };
         let mut transcript_mtime = None;
+        let mut task_steps = Vec::new();
+        let mut recent_activity = Vec::new();
+        let mut is_background_tool = false;
+        let mut turn_started_epoch = None;
 
         if let Some(ref id) = conv_id {
             let transcript_path = resolved_root
@@ -169,6 +175,10 @@ pub fn read_antigravity_sessions(
                     usage.output_tokens = tm.output_tokens;
                     usage.session_total_tokens = tm.total_tokens;
                     usage.context_tokens = tm.latest_context_tokens;
+                    task_steps = tm.task_steps;
+                    recent_activity = tm.recent_activity;
+                    is_background_tool = tm.is_background_subagent_or_media;
+                    turn_started_epoch = tm.turn_started_epoch;
                     if tm.latest_context_tokens.is_some() {
                         if let Some(window) =
                             estimated_context_window(&model_name, context_window_override)
@@ -182,10 +192,23 @@ pub fn read_antigravity_sessions(
             }
         }
 
+        // Do not flag background image generation or subagent execution as waiting for user approval.
+        let (state, interaction_reason) = if state == AgentRunState::NeedsInput && is_background_tool
+        {
+            (AgentRunState::Running, None)
+        } else {
+            (state, interaction_reason)
+        };
+
         let last_updated = [modified_epoch, transcript_mtime]
             .into_iter()
             .flatten()
             .max();
+        let active_since_epoch = if state.is_active_or_waiting() {
+            turn_started_epoch.or(last_updated)
+        } else {
+            None
+        };
         let project_name = project_display_name(workspace_path.as_deref(), watched_folders);
         let git_branch = workspace_path.as_deref().and_then(detect_git_branch);
 
@@ -202,10 +225,12 @@ pub fn read_antigravity_sessions(
             session_title: row.title.filter(|t| !t.trim().is_empty()),
             usage,
             last_updated_epoch: last_updated,
-            active_since_epoch: None,
+            active_since_epoch,
             resolved_source_path: Some(resolved_root.to_string_lossy().into_owned()),
             status_message: None,
             interaction_reason,
+            task_steps,
+            recent_activity,
         });
 
         if results.len() >= limit {
@@ -357,6 +382,10 @@ pub struct TranscriptUsage {
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
     pub latest_context_tokens: Option<u64>,
+    pub task_steps: Vec<TaskStep>,
+    pub recent_activity: Vec<String>,
+    pub is_background_subagent_or_media: bool,
+    pub turn_started_epoch: Option<i64>,
 }
 
 pub fn parse_transcript_jsonl(text: &str) -> TranscriptUsage {
@@ -365,39 +394,205 @@ pub fn parse_transcript_jsonl(text: &str) -> TranscriptUsage {
     let mut sum_output = 0_u64;
     let mut last_context = 0_u64;
     let mut saw_usage = false;
+    let mut latest_steps: Vec<TaskStep> = Vec::new();
+    let mut recent_activity: Vec<String> = Vec::new();
+    let mut is_background_subagent_or_media = false;
+    let mut turn_started_epoch: Option<i64> = None;
 
     for line in text.lines() {
-        if !line.contains("input_tokens") && !line.contains("output_tokens") {
+        let is_new_user_turn =
+            line.contains("\"USER_INPUT\"") || line.contains("\"USER_EXPLICIT\"");
+        let has_tokens = line.contains("input_tokens") || line.contains("output_tokens");
+        let has_tools = line.contains("tool_calls") || line.contains("update_steps");
+        if !is_new_user_turn && !has_tokens && !has_tools {
             continue;
         }
         let Ok(obj) = serde_json::from_str::<Value>(line) else {
             continue;
         };
-        let inp = obj.get("input_tokens").and_then(Value::as_u64).unwrap_or(0);
-        let cache = obj
-            .get("cache_read_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
-        let out = obj.get("output_tokens").and_then(Value::as_u64).unwrap_or(0);
-        if inp > 0 || cache > 0 || out > 0 {
-            saw_usage = true;
-            sum_input += inp;
-            sum_cache += cache;
-            sum_output += out;
-            last_context = inp + cache + out;
+        if is_new_user_turn
+            && (obj.get("type").and_then(Value::as_str) == Some("USER_INPUT")
+                || obj.get("source").and_then(Value::as_str) == Some("USER_EXPLICIT"))
+        {
+            // New user task started: clear previous task's finished checklist & activity
+            latest_steps.clear();
+            recent_activity.clear();
+            is_background_subagent_or_media = false;
+            turn_started_epoch = obj
+                .get("timestamp")
+                .or_else(|| obj.get("created_at"))
+                .and_then(Value::as_str)
+                .and_then(|ts| DateTime::parse_from_rfc3339(ts).ok().map(|dt| dt.timestamp()))
+                .or_else(|| obj.get("timestamp").and_then(Value::as_i64));
+            continue;
+        }
+        if has_tools {
+            if let Some(parsed) = extract_steps_recursive(&obj) {
+                if !parsed.is_empty() {
+                    latest_steps = parsed;
+                }
+            }
+            if let Some(calls) = obj.get("tool_calls").and_then(Value::as_array) {
+                is_background_subagent_or_media = false;
+                for call in calls {
+                    let name = call.get("name").and_then(Value::as_str).unwrap_or("");
+                    let lower = name.to_lowercase();
+                    if lower.contains("image")
+                        || lower.contains("invoke_subagent")
+                        || lower.contains("generate_")
+                    {
+                        is_background_subagent_or_media = true;
+                    }
+                    if name == "update_focus" {
+                        if let Some(focus) = call
+                            .get("args")
+                            .and_then(|a| a.get("focus"))
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                        {
+                            let label = focus.to_string();
+                            if recent_activity.last().map(String::as_str) != Some(label.as_str()) {
+                                recent_activity.push(label);
+                                if recent_activity.len() > 4 {
+                                    recent_activity.remove(0);
+                                }
+                            }
+                        }
+                    } else if name == "run_command" {
+                        if let Some(summary) = call
+                            .get("args")
+                            .and_then(|a| a.get("toolSummary"))
+                            .and_then(Value::as_str)
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                        {
+                            let label = format!("$ {summary}");
+                            if recent_activity.last().map(String::as_str) != Some(label.as_str()) {
+                                recent_activity.push(label);
+                                if recent_activity.len() > 4 {
+                                    recent_activity.remove(0);
+                                }
+                            }
+                        }
+                    } else if matches!(name, "edit_file" | "write_file") {
+                        if let Some(path) = call
+                            .get("args")
+                            .and_then(|a| a.get("Path"))
+                            .and_then(Value::as_str)
+                        {
+                            let file = Path::new(path)
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or(path);
+                            let label = if name == "write_file" {
+                                format!("Erstellt {file}")
+                            } else {
+                                format!("Bearbeitet {file}")
+                            };
+                            if recent_activity.last().map(String::as_str) != Some(label.as_str()) {
+                                recent_activity.push(label);
+                                if recent_activity.len() > 4 {
+                                    recent_activity.remove(0);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if has_tokens {
+            let inp = obj.get("input_tokens").and_then(Value::as_u64).unwrap_or(0);
+            let cache = obj
+                .get("cache_read_tokens")
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            let out = obj.get("output_tokens").and_then(Value::as_u64).unwrap_or(0);
+            if inp > 0 || cache > 0 || out > 0 {
+                saw_usage = true;
+                sum_input += inp;
+                sum_cache += cache;
+                sum_output += out;
+                last_context = inp + cache + out;
+            }
         }
     }
 
-    if !saw_usage {
-        return TranscriptUsage::default();
-    }
     TranscriptUsage {
-        input_tokens: Some(sum_input),
-        cache_read_tokens: Some(sum_cache),
-        output_tokens: Some(sum_output),
-        total_tokens: Some(sum_input + sum_cache + sum_output),
-        latest_context_tokens: Some(last_context),
+        input_tokens: saw_usage.then_some(sum_input),
+        cache_read_tokens: saw_usage.then_some(sum_cache),
+        output_tokens: saw_usage.then_some(sum_output),
+        total_tokens: saw_usage.then_some(sum_input + sum_cache + sum_output),
+        latest_context_tokens: saw_usage.then_some(last_context),
+        task_steps: latest_steps,
+        recent_activity,
+        is_background_subagent_or_media,
+        turn_started_epoch,
     }
+}
+
+fn extract_steps_recursive(val: &Value) -> Option<Vec<TaskStep>> {
+    match val {
+        Value::Object(map) => {
+            if let Some(steps_val) = map.get("steps") {
+                if let Some(parsed) = parse_steps_value(steps_val) {
+                    return Some(parsed);
+                }
+            }
+            for child in map.values() {
+                if let Some(found) = extract_steps_recursive(child) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        Value::Array(arr) => {
+            for item in arr {
+                if let Some(found) = extract_steps_recursive(item) {
+                    return Some(found);
+                }
+            }
+            None
+        }
+        Value::String(s) if s.contains("\"steps\"") => {
+            let nested = serde_json::from_str::<Value>(s).ok()?;
+            extract_steps_recursive(&nested)
+        }
+        _ => None,
+    }
+}
+
+fn parse_steps_value(val: &Value) -> Option<Vec<TaskStep>> {
+    let owned;
+    let arr = match val {
+        Value::Array(a) => a,
+        Value::String(s) => {
+            owned = serde_json::from_str::<Value>(s).ok()?;
+            owned.as_array()?
+        }
+        _ => return None,
+    };
+    let parsed: Vec<TaskStep> = arr
+        .iter()
+        .filter_map(|item| {
+            let title = item.get("title").and_then(Value::as_str)?.trim();
+            if title.is_empty() {
+                return None;
+            }
+            let status = match item.get("status").and_then(Value::as_str).unwrap_or("") {
+                "done" | "completed" => TaskStepStatus::Done,
+                "in_progress" => TaskStepStatus::InProgress,
+                "skipped" => TaskStepStatus::Skipped,
+                "failed" => TaskStepStatus::Failed,
+                _ => TaskStepStatus::Pending,
+            };
+            Some(TaskStep {
+                title: title.to_string(),
+                status,
+            })
+        })
+        .collect();
+    (!parsed.is_empty()).then_some(parsed)
 }
 
 struct SummaryRow {
@@ -421,7 +616,9 @@ fn read_summary_rows(db_path: &Path, limit: i64) -> Vec<SummaryRow> {
         return Vec::new();
     };
     let sql = "SELECT conversation_id, title, workspace_uris, status, step_count, not_fully_idle, last_modified_time \
-               FROM conversation_summaries WHERE killed = 0 ORDER BY last_modified_time DESC LIMIT ?1";
+               FROM conversation_summaries WHERE killed = 0 \
+               ORDER BY (CASE WHEN status LIKE '%RUNNING%' OR status LIKE '%WAITING%' OR not_fully_idle != 0 THEN 0 ELSE 1 END), \
+               last_modified_time DESC LIMIT ?1";
     let Ok(mut stmt) = conn.prepare(sql) else {
         return Vec::new();
     };
@@ -603,6 +800,21 @@ mod tests {
     use super::*;
     use rusqlite::Connection;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn extracts_live_update_steps_from_transcript_jsonl() {
+        let jsonl = r#"
+{"type":"PLANNER_RESPONSE","tool_calls":[{"name":"update_steps","args":{"steps":"[{\"title\":\"Old done step\",\"status\":\"done\"}]"}}]}
+{"source":"USER_EXPLICIT","type":"USER_INPUT"}
+{"type":"PLANNER_RESPONSE","input_tokens":1200,"cache_read_tokens":300,"output_tokens":500,"tool_calls":[{"name":"update_steps","args":{"steps":"[{\"title\":\"Inspect code\",\"status\":\"done\"},{\"title\":\"Build UI\",\"status\":\"in_progress\"},{\"title\":\"Run tests\",\"status\":\"pending\"}]"}},{"name":"update_focus","args":{"focus":"Building UI layout"}}]}
+"#;
+        let parsed = parse_transcript_jsonl(jsonl);
+        assert_eq!(parsed.task_steps.len(), 3);
+        assert_eq!(parsed.task_steps[0].title, "Inspect code");
+        assert_eq!(parsed.task_steps[1].status, TaskStepStatus::InProgress);
+        assert_eq!(parsed.recent_activity, vec!["Building UI layout"]);
+        assert_eq!(parsed.total_tokens, Some(2000));
+    }
 
     #[test]
     fn splits_model_and_effort() {

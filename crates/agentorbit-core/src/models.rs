@@ -106,6 +106,22 @@ impl UsageMetrics {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStepStatus {
+    Done,
+    InProgress,
+    Pending,
+    Skipped,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskStep {
+    pub title: String,
+    pub status: TaskStepStatus,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AgentSnapshot {
     pub kind: AgentKind,
@@ -124,6 +140,10 @@ pub struct AgentSnapshot {
     pub resolved_source_path: Option<String>,
     pub status_message: Option<String>,
     pub interaction_reason: Option<String>,
+    #[serde(default)]
+    pub task_steps: Vec<TaskStep>,
+    #[serde(default)]
+    pub recent_activity: Vec<String>,
 }
 
 impl AgentSnapshot {
@@ -150,6 +170,8 @@ impl AgentSnapshot {
             resolved_source_path: None,
             status_message: message,
             interaction_reason: None,
+            task_steps: Vec::new(),
+            recent_activity: Vec::new(),
         }
     }
 }

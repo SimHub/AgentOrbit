@@ -1,6 +1,6 @@
 use crate::models::{
     now_epoch_secs, system_time_to_epoch, AgentKind, AgentRunState, AgentSnapshot, RateLimitWindow,
-    UsageMetrics, WatchedFolderStatus,
+    TaskStep, TaskStepStatus, UsageMetrics, WatchedFolderStatus,
 };
 use crate::paths::{detect_git_branch, expand_tilde, project_display_name, resolve_path};
 use crate::sqlite::open_readonly;
@@ -21,9 +21,12 @@ pub struct CodexConfigDefaults {
 pub struct SessionTailMetrics {
     pub usage: UsageMetrics,
     pub last_event_epoch: Option<i64>,
+    pub turn_started_epoch: Option<i64>,
     pub has_open_turn: bool,
     pub pending_user_input_tool: Option<String>,
     pub pending_approval_tool: Option<String>,
+    pub task_steps: Vec<TaskStep>,
+    pub recent_activity: Vec<String>,
 }
 
 pub fn read_codex_sessions(
@@ -125,7 +128,7 @@ pub fn read_codex_sessions(
             .and_then(|p| resolve_rollout_path(p, &resolved_root));
         let mut tail = resolved_rollout
             .as_deref()
-            .map(|p| parse_session_tail(p, 96_000))
+            .map(|p| parse_session_tail(p, 256_000))
             .unwrap_or_default();
 
         if tail.usage.session_total_tokens.is_none() {
@@ -143,7 +146,7 @@ pub fn read_codex_sessions(
             .flatten()
             .max();
         let age = newest_ts.map(|ts| (now - ts).max(0)).unwrap_or(i64::MAX);
-        let is_very_recent = age < 20;
+        let is_very_recent = age < 30;
         let approval_allowed = non_empty(row.approval_mode)
             .map(|m| m.to_lowercase() != "never")
             .unwrap_or(true);
@@ -161,10 +164,19 @@ pub fn read_codex_sessions(
                 "Freigabe nötig"
             };
             (AgentRunState::NeedsInput, Some(reason.to_string()))
-        } else if (has_active_lock && is_very_recent) || age < 8 || (tail.has_open_turn && age < 25) {
+        } else if (has_active_lock && is_very_recent)
+            || age < 10
+            || (tail.has_open_turn && age < 1_800)
+        {
             (AgentRunState::Running, None)
         } else {
             (AgentRunState::Idle, None)
+        };
+
+        let active_since_epoch = if state.is_active_or_waiting() {
+            tail.turn_started_epoch.or(newest_ts)
+        } else {
+            None
         };
 
         let project_key = cwd.clone().unwrap_or_else(|| thread_id.clone());
@@ -191,10 +203,12 @@ pub fn read_codex_sessions(
             session_title: title,
             usage: tail.usage,
             last_updated_epoch: newest_ts,
-            active_since_epoch: None,
+            active_since_epoch,
             resolved_source_path: Some(resolved_root.to_string_lossy().into_owned()),
             status_message: None,
             interaction_reason,
+            task_steps: tail.task_steps,
+            recent_activity: tail.recent_activity,
         });
 
         if results.len() >= limit {
@@ -258,18 +272,23 @@ pub fn parse_session_jsonl(text: &str, dropped_leading_partial_line: bool) -> Se
 
     let mut usage = UsageMetrics::default();
     let mut last_event_epoch: Option<i64> = None;
+    let mut turn_started_epoch: Option<i64> = None;
     let mut has_open_turn = false;
     let mut pending_calls: HashMap<String, String> = HashMap::new();
     let mut pending_order: Vec<String> = Vec::new();
+    let mut task_steps: Vec<TaskStep> = Vec::new();
+    let mut recent_activity: Vec<String> = Vec::new();
 
     for line in lines {
         let Ok(json) = serde_json::from_str::<Value>(line) else {
             continue;
         };
 
+        let mut line_epoch: Option<i64> = None;
         if let Some(ts) = json.get("timestamp").and_then(Value::as_str) {
             if let Ok(dt) = DateTime::parse_from_rfc3339(ts) {
-                last_event_epoch = Some(dt.timestamp());
+                line_epoch = Some(dt.timestamp());
+                last_event_epoch = line_epoch;
             }
         }
 
@@ -282,11 +301,15 @@ pub fn parse_session_jsonl(text: &str, dropped_leading_partial_line: bool) -> Se
         match (top_type, payload_type) {
             (Some("event_msg"), Some("task_started")) => {
                 has_open_turn = true;
+                turn_started_epoch = line_epoch.or(last_event_epoch);
                 pending_calls.clear();
                 pending_order.clear();
+                task_steps.clear();
+                recent_activity.clear();
             }
             (Some("event_msg"), Some("task_complete" | "turn_aborted")) => {
                 has_open_turn = false;
+                turn_started_epoch = None;
                 pending_calls.clear();
                 pending_order.clear();
             }
@@ -318,6 +341,20 @@ pub fn parse_session_jsonl(text: &str, dropped_leading_partial_line: bool) -> Se
             (Some("response_item"), Some("function_call" | "custom_tool_call")) => {
                 let call_id = payload.get("call_id").and_then(Value::as_str).unwrap_or("");
                 let name = payload.get("name").and_then(Value::as_str).unwrap_or("");
+                if name == "update_plan" {
+                    if let Some(parsed) = parse_codex_plan(payload.get("arguments")) {
+                        if !parsed.is_empty() {
+                            task_steps = parsed;
+                        }
+                    }
+                } else if let Some(act) = summarize_codex_tool(name, payload.get("arguments")) {
+                    if recent_activity.last().map(String::as_str) != Some(act.as_str()) {
+                        recent_activity.push(act);
+                        if recent_activity.len() > 4 {
+                            recent_activity.remove(0);
+                        }
+                    }
+                }
                 if !call_id.is_empty() && !name.is_empty() {
                     has_open_turn = true;
                     pending_calls.insert(call_id.to_string(), name.to_string());
@@ -353,10 +390,71 @@ pub fn parse_session_jsonl(text: &str, dropped_leading_partial_line: bool) -> Se
     SessionTailMetrics {
         usage,
         last_event_epoch,
+        turn_started_epoch,
         has_open_turn,
         pending_user_input_tool,
         pending_approval_tool,
+        task_steps,
+        recent_activity,
     }
+}
+
+fn summarize_codex_tool(name: &str, args: Option<&Value>) -> Option<String> {
+    let raw = match args? {
+        Value::String(s) => s.as_str(),
+        _ => "",
+    };
+    if name == "apply_patch" {
+        for line in raw.lines() {
+            if let Some(p) = line.strip_prefix("*** Update File: ") {
+                let file = Path::new(p.trim()).file_name().and_then(|n| n.to_str()).unwrap_or(p.trim());
+                return Some(format!("Bearbeitet {file}"));
+            }
+            if let Some(p) = line.strip_prefix("*** Add File: ") {
+                let file = Path::new(p.trim()).file_name().and_then(|n| n.to_str()).unwrap_or(p.trim());
+                return Some(format!("Erstellt {file}"));
+            }
+        }
+        return Some("Bearbeitet Dateien".to_string());
+    }
+    if matches!(name, "exec_command" | "exec") {
+        if let Ok(json) = serde_json::from_str::<Value>(raw) {
+            if let Some(cmd) = json.get("cmd").and_then(Value::as_str) {
+                let short = cmd.trim().chars().take(36).collect::<String>();
+                if !short.is_empty() {
+                    return Some(format!("$ {short}"));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn parse_codex_plan(args: Option<&Value>) -> Option<Vec<TaskStep>> {
+    let val = match args? {
+        Value::String(s) => serde_json::from_str::<Value>(s).ok()?,
+        other => other.clone(),
+    };
+    let arr = val.get("plan").and_then(Value::as_array)?;
+    let steps = arr
+        .iter()
+        .filter_map(|item| {
+            let title = item.get("step").and_then(Value::as_str)?.trim();
+            if title.is_empty() {
+                return None;
+            }
+            let status = match item.get("status").and_then(Value::as_str).unwrap_or("") {
+                "completed" | "done" => TaskStepStatus::Done,
+                "in_progress" => TaskStepStatus::InProgress,
+                _ => TaskStepStatus::Pending,
+            };
+            Some(TaskStep {
+                title: title.to_string(),
+                status,
+            })
+        })
+        .collect();
+    Some(steps)
 }
 
 struct ThreadRow {
@@ -390,6 +488,8 @@ fn idle_placeholder(resolved_root: &Path, defaults: &CodexConfigDefaults) -> Age
         resolved_source_path: Some(resolved_root.to_string_lossy().into_owned()),
         status_message: Some("No session yet".to_string()),
         interaction_reason: None,
+        task_steps: Vec::new(),
+        recent_activity: Vec::new(),
     }
 }
 
@@ -426,7 +526,7 @@ fn has_recent_lock(dir: &Path, now_epoch: i64) -> bool {
         if let Ok(meta) = entry.metadata() {
             if let Ok(mtime) = meta.modified() {
                 if let Some(ts) = system_time_to_epoch(mtime) {
-                    if (now_epoch - ts).abs() < 15 {
+                    if (now_epoch - ts).abs() < 60 {
                         return true;
                     }
                 }
@@ -524,6 +624,60 @@ mod tests {
         assert_eq!(sessions[0].project_name, "demo-project");
         assert_eq!(sessions[0].model_name, "gpt-5.3-codex");
         assert_eq!(sessions[0].usage.session_total_tokens, Some(42_000));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn detects_already_running_codex_open_turn_after_two_minutes() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("agentorbit_codex_midtask_{nanos}"));
+        let project = root.join("live-project");
+        let sessions_dir = root.join("sessions");
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(&sessions_dir).unwrap();
+
+        let started_ts = now_epoch_secs() - 120;
+        let started_iso = chrono::DateTime::from_timestamp(started_ts, 0)
+            .unwrap()
+            .to_rfc3339();
+        let rollout_path = sessions_dir.join("rollout-midtask.jsonl");
+        let jsonl = format!(
+            "{{\"timestamp\":\"{started_iso}\",\"type\":\"event_msg\",\"payload\":{{\"type\":\"task_started\"}}}}\n"
+        );
+        fs::write(&rollout_path, jsonl).unwrap();
+
+        let db_path = root.join("state_5.sqlite");
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE threads (id TEXT, cwd TEXT, model TEXT, reasoning_effort TEXT, tokens_used INTEGER, git_branch TEXT, updated_at REAL, title TEXT, rollout_path TEXT, archived INTEGER)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO threads VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0)",
+            rusqlite::params![
+                "thread-midtask",
+                project.to_string_lossy().as_ref(),
+                "gpt-5.3-codex",
+                "xhigh",
+                1200_i64,
+                "main",
+                started_ts as f64,
+                "Long Running Task",
+                rollout_path.to_string_lossy().as_ref()
+            ],
+        )
+        .unwrap();
+        drop(conn);
+
+        let sessions = read_codex_sessions(&root.to_string_lossy(), &[], 4);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].state, AgentRunState::Running);
+        assert_eq!(sessions[0].active_since_epoch, Some(started_ts));
 
         let _ = fs::remove_dir_all(&root);
     }
