@@ -39,6 +39,7 @@ A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required
   - Drag freely with a live `24 pt` snap grid + 9 screen anchors (hold `⌥` for free placement).
   - Resize in 2D (`240 pt` up to full screen width, 1–3 columns, plus adjustable max list height).
 - **3 View Densities:** `Minimal` (2-line corner widget, auto-enabled `< 290 pt`), `Kompakt`, and `Detail` (permanent usage & circular `Weekly` / `5h` rate-limit rings + reset timers).
+- **Keyboard Shortcuts:** Choose a preset or record your own shortcut for the HUD, view switching, or showing all active projects under **Settings → Display → Keyboard Shortcuts**. AgentOrbit flags conflicting assignments.
 - **1-Click Project Launcher:** Open any active project directly in **Antigravity**, **VS Code**, **Cursor**, **Terminal** (Ghostty/Warp/iTerm/Terminal), or **Finder** (plus right-click context menu).
 - **Needs-Input & Completion Notifications:** Detects when Codex, Antigravity, Claude Code, OpenCode, or LM Studio Bionic pauses for user approval or a question (`Needs input` / `Eingabe nötig` orange menu bar & HUD badge) and sends native macOS notifications (+ optional sound) for both interaction requests and `Active → Idle` completion.
 - **Zero-Config, Bilingual UI & Cost Estimate:** Auto-discovers installed agent directories (including deep Claude Code JSONL token/tool-use parsing), switches seamlessly between **English**, **Deutsch**, or **Auto (macOS)**, supports Launch at Login (`SMAppService`), and optionally displays exact/estimated session costs (`~$0.xx`).
@@ -49,6 +50,7 @@ A fast, lightweight (~2 MB binary, 0 third-party dependencies, no Xcode required
 - **Multi-Projekt-Übersicht:** Zeigt alle parallelen und aktuellen Sessions mit Projekt, Live-Git-Branch, Modell + Stärke, Laufzeit-Timer und Menüleisten-Counter.
 - **Desktop-HUD mit Einrast-Grid:** Anpinnbar (`⌃⌥ O`), stufenlos in Breite & Max-Höhe skalierbar (`240 pt` bis Bildschirmbreite, 1–3 Spalten) mit `24 pt`-Raster & 9 Bildschirm-Ankern (`⌥` = frei platzieren) sowie einstellbarer Deckkraft.
 - **3 Ansichts-Stufen:** `Minimal`, `Kompakt`, `Detail` (inkl. runder `Weekly`/`5h`-Limit-Ringe und optionaler `~$`-Kosten-Schätzung).
+- **Tastenkürzel:** Unter **Einstellungen → Anzeige → Tastenkürzel** kannst du Presets oder eigene Kombinationen für das HUD, den Ansichtswechsel und „Alle aktiven Projekte zeigen“ wählen. AgentOrbit meldet doppelte Belegungen.
 - **1-Klick-IDE-Starter, Wartet- & Fertig-Meldung:** Zeigt per orangem Badge + Mitteilung, sobald ein Agent auf deine Freigabe/Rückfrage wartet (`Eingabe nötig`) oder mit `Aktiv → Idle` fertig ist, und öffnet Projekte direkt im passenden Editor/Terminal.
 - **Zweisprachig (EN/DE), Zero-Config & Erweiterbar:** Auto-Discovery beim Erststart (inkl. tiefem Claude Code JSONL-Support, OpenCode v2, LM Studio Bionic, Pi), umschaltbare Sprache (`Auto` / `English` / `Deutsch`) und „Bei Anmeldung starten“.
 

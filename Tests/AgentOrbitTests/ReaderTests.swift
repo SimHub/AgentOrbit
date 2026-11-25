@@ -50,6 +50,7 @@ struct ReaderTestRunner {
             ("testOpenCodeV2SessionDetection", testOpenCodeV2SessionDetection),
             ("testLMStudioBionicSessionDetection", testLMStudioBionicSessionDetection),
             ("testAppLocalizationMappings", testAppLocalizationMappings),
+            ("testHotKeyPreferences", testHotKeyPreferences),
             ("testClaudeCodeJSONLDetection", testClaudeCodeJSONLDetection)
         ]
 
@@ -789,6 +790,23 @@ struct ReaderTestRunner {
         let legacyJSON = Data(#"{"codexPath":"/tmp/c","antigravityPath":"/tmp/a","watchedFolders":[],"labelMode":"icon","antigravityModelAliases":{}}"#.utf8)
         let decoded = try JSONDecoder().decode(KoordinatorConfig.self, from: legacyJSON)
         try expectEqual(decoded.appLanguage, .system)
+    }
+
+    static func testHotKeyPreferences(tempRoot: URL) throws {
+        let legacyJSON = Data(#"{"hotKeyPreset":"cmdShiftO"}"#.utf8)
+        var config = try JSONDecoder().decode(KoordinatorConfig.self, from: legacyJSON)
+        try expectEqual(config.hotKeyPreset, .commandShiftO)
+        try expectEqual(config.viewHotKeyPreset, .none)
+        try expectEqual(config.activeProjectsHotKeyPreset, .none)
+        try expectTrue(config.customHotKeys.isEmpty)
+
+        config.viewHotKeyPreset = .controlOptionV
+        config.activeProjectsHotKeyPreset = .controlOptionP
+        let shortcut = CustomHotKey(keyCode: 15, modifiers: [.control, .shift, .command], keyLabel: "R")
+        config.customHotKeys[.cycleView] = shortcut
+        try expectEqual(shortcut.title, "⌃⇧⌘ R")
+        let encoded = try JSONEncoder().encode(config)
+        try expectEqual(JSONDecoder().decode(KoordinatorConfig.self, from: encoded), config)
     }
 
     static func testClaudeCodeJSONLDetection(tempRoot: URL) throws {

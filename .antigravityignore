@@ -1,0 +1,31 @@
+# Swift & Xcode build artifacts
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# Distribution & release artifacts
+dist/
+*.app/
+*.dmg
+*.zip
+*.tar.gz
+
+# Local packaging & maintainer files
+/packaging/homebrew/local/
+/packaging/homebrew/MAINTAINER.local.md
+
+# Binary & media assets
+docs/assets/
+*.png
+*.jpg
+*.jpeg
+*.icns
+
+# OS, logs & environment
+.DS_Store
+.env
+.env.*
+*.log

@@ -271,21 +271,13 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 PLIST
 
 echo "4/4 Ad-hoc signing..."
-codesign --force --deep --sign - "$APP_BUNDLE" >/dev/null 2>&1 || true
+codesign --force --deep --sign - "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
 touch "$APP_BUNDLE"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_BUNDLE" >/dev/null 2>&1 || true
 
 echo "Built: $APP_BUNDLE"
 
 if [[ "$CREATE_DMG" == "true" ]]; then
-  DMG_STAGING="$BUILD_DIR/dmg-staging"
-  DMG_PATH="$DIST_DIR/AgentOrbit.dmg"
-  echo "Packaging DMG..."
-  rm -rf "$DMG_STAGING" "$DMG_PATH"
-  mkdir -p "$DMG_STAGING"
-  cp -R "$APP_BUNDLE" "$DMG_STAGING/"
-  ln -s /Applications "$DMG_STAGING/Applications"
-  hdiutil create -volname "AgentOrbit" -srcfolder "$DMG_STAGING" -ov -format UDZO "$DMG_PATH" >/dev/null
-  rm -rf "$DMG_STAGING"
-  echo "Built DMG: $DMG_PATH"
+  zsh "$PROJECT_DIR/scripts/package_dmg.sh" "$APP_BUNDLE" "$DIST_DIR/AgentOrbit.dmg"
 fi
