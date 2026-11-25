@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AgentOrbit</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="hud-shell" class="hud-shell">
+      <header class="hud-header" data-tauri-drag-region>
+        <div class="brand" data-tauri-drag-region>
+          <span id="status-orb" class="orb idle"></span>
+          <span class="title">AgentOrbit</span>
+          <span id="live-badge" class="badge hidden">0</span>
+        </div>
+        <div class="controls">
+          <button id="density-btn" class="icon-btn" title="Ansicht wechseln">K</button>
+          <button id="lang-btn" class="icon-btn" title="Sprache DE/EN">DE</button>
+          <button id="refresh-btn" class="icon-btn" title="Aktualisieren">↻</button>
+          <button id="hide-btn" class="icon-btn" title="Ausblenden">✕</button>
+        </div>
+      </header>
+
+      <main id="session-list" class="session-list density-compact"></main>
+
+      <footer class="hud-footer">
+        <span id="footer-status" class="footer-status">Bereit</span>
+        <label class="opacity-control" title="Deckkraft">
+          <input id="opacity-slider" type="range" min="45" max="100" value="92" />
+        </label>
+      </footer>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

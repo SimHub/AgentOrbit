@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/agentorbit-core",
     "crates/agentorbit-cli",
+    "src-tauri",
 ]
 
 [workspace.package]

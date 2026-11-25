@@ -1,0 +1,24 @@
+[package]
+name = "agentorbit-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "agentorbit_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "agentorbit-app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+agentorbit-core = { path = "../crates/agentorbit-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-notification = "2"

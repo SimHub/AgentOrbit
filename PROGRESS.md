@@ -84,18 +84,19 @@ Warum diese Kombination „klein, schnell und besser als der Vorgänger“ ist:
 - Unit-Tests erzeugen ausschließlich synthetische Fixtures in temporären Verzeichnissen und räumen diese wieder auf.
 - Lokale Arbeitsnotizen (`CONTEXT.md`, `*.local.md`, `*.local.*`, `.env*`, `packaging/homebrew/local/`) sind per `.gitignore` strikt vom Git-Tracking ausgeschlossen.
 
-### Phase 2: Tauri v2 Desktop-Shell & OS-Integration
-- [ ] Tauri v2 Projekt aufsetzen (`src-tauri`), `agentorbit-core` einbinden.
-- [ ] System-Tray / Menüleisten-Icon mit Live-Badge (parallele Sessions + Orange-Indicator bei `needsInput`).
-- [ ] Frameless, transparentes Always-on-Top HUD-Fenster + `GridSnapCalculator` (24pt-Raster, 9 Anker, Alt/Option = frei).
-- [ ] Globale Shortcuts (`tauri-plugin-global-shortcut`), Notifications (`tauri-plugin-notification`), Autostart (`tauri-plugin-autostart`).
-- [ ] Plattformübergreifender 1-Klick-Launcher (Antigravity, VS Code, Cursor, Terminal, Dateimanager je nach OS).
+### Phase 2: Tauri v2 Desktop-Shell & OS-Integration – Grundgerüst fertig
+- [x] Tauri v2 Projekt aufgesetzt (`src-tauri`), `agentorbit-core` eingebunden (**0 `node_modules`-Abhängigkeiten**, `frontendDist: "../ui"` – baut rein mit `cargo`).
+- [x] System-Tray / Menüleisten-Icon mit Live-Badge (`● N` / `! N` bei `needs_input`) & Menü (Show/Hide, Refresh, Quit).
+- [x] Frameless, transparentes Always-on-Top HUD-Fenster (`decorations: false`, `transparent: true`, `alwaysOnTop: true`, `data-tauri-drag-region`).
+- [x] Globaler Shortcut (`⌃⌥O` / `Ctrl+Alt+O`), native OS-Notifications (`needs_input` & `running → idle`) und Live-Push via `OrbitWatcher`.
+- [x] Plattformübergreifender 1-Klick-Launcher (`open_project` für macOS `open`, Linux `xdg-open`/`code`, Windows `cmd /C start`/`code`).
+- [ ] Optional: `GridSnapCalculator` (24pt-Raster, 9 Anker) & `tauri-plugin-autostart` nachrüsten.
 
-### Phase 3: HUD-Frontend & Feature-Parität+
-- [ ] Responsive 2D-Ansicht (1–3 Spalten, `Minimal` / `Kompakt` / `Detail`).
-- [ ] Live-Laufzeit-Timer, runde `Weekly` / `5h` Rate-Limit-Ringe, optionale `~$`-Kosten.
-- [ ] Zweisprachig (DE / EN / Auto) + Settings-Fenster (Anzeige, Agents, Ordner).
-- [ ] Optional: Remote-Agent-Anbindung (WebSocket/SSH-Stream von `agentorbitd` auf Linux/WSL2).
+### Phase 3: HUD-Frontend & Feature-Parität+ – Erste Version aktiv (`ui/`)
+- [x] Responsive 2D-Grid (`ui/index.html`, `ui/styles.css`, `ui/app.js`), `Minimal` / `Kompakt` / `Detail` (Auto-Minimal `< 290 px`).
+- [x] Live-Laufzeit-Timer, runde `5h` / `7d` Rate-Limit-Ringe (SVG), optionale `~$`-Kosten, Deckkraft-Slider.
+- [x] Zweisprachig (DE / EN Live-Umschalter).
+- [ ] Settings-Fenster (Custom-Agents, Ordner, eigene Shortcuts) & optionaler Remote-Agent-Stream (`agentorbitd` via WebSocket/SSH).
 
 ### Phase 4: Signaturfreier Vertrieb & Lokale Installation
 - [ ] **macOS:** Installation per Homebrew Formula / `--from-source` (`cargo build --release`), kein App Store, keine kostenpflichtige Signatur nötig.
