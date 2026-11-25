@@ -1,6 +1,7 @@
-# Swift & Xcode build artifacts
+# Swift, Rust & Xcode build artifacts
 .build/
 .swiftpm/
+target/
 DerivedData/
 *.xcodeproj/
 *.xcworkspace/

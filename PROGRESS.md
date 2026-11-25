@@ -65,17 +65,24 @@ Warum diese Kombination „klein, schnell und besser als der Vorgänger“ ist:
 - [x] `.antigravityignore` angelegt, um Build- und Binär-Overhead im Agent-Kontext zu reduzieren.
 - [ ] Keine Apple-Developer-Signatur / Notarisierung / App-Store-Workflows mehr einplanen; Distribution lokal per `--from-source` oder reinem Binary-Build.
 
-### Phase 1: `agentorbit-core` in Rust (Fundament)
-- [ ] Cargo-Workspace anlegen (`crates/agentorbit-core`, `crates/agentorbit-cli` für Tests/Headless).
-- [ ] Datenmodelle (`AgentSnapshot`, Status `.running` / `.needsInput` / `.idle`, Token-/Kosten-Metriken) portieren.
-- [ ] Plattformübergreifende Pfad-Erkennung (`dirs` Crate für `~`, XDG auf Linux, AppData auf Windows) + Symlink-Auflösung.
-- [ ] Reader portieren & mit Fixtures testen:
-  - [ ] Antigravity (`conversations/<id>.db`, `steps.status == 9`)
-  - [ ] Codex (`task_started` / `request_user_input` / `approval_mode`)
-  - [ ] Claude Code & Custom JSONL (`/subagents/`-Filter, `tool_use` ohne `tool_result`)
-  - [ ] OpenCode (`session_v2` + Legacy-Fallback)
-  - [ ] LM Studio Bionic (`ng-sessions.sqlite`)
-- [ ] `notify`-File-Watcher + Debouncing + Git-Branch-Reader + `CostEstimator`.
+### Phase 1: `agentorbit-core` in Rust (Fundament) – Abgeschlossen
+- [x] Cargo-Workspace anlegen (`crates/agentorbit-core`, `crates/agentorbit-cli` für Tests/Headless).
+- [x] Datenmodelle (`AgentSnapshot`, Status `needs_input` / `running` / `idle`, Token-/Kosten-Metriken, `serde`-JSON) portiert (`models.rs`).
+- [x] Plattformübergreifende Pfad-Erkennung (`dirs` für `~` / XDG / AppData), Symlink-Auflösung & `.git/HEAD`-Branch-Erkennung ohne Subprocess (`paths.rs`, `discovery.rs`).
+- [x] Alle Reader portiert & mit rein synthetischen Temp-Fixtures getestet (**15/15 Unit-Tests grün**):
+  - [x] Antigravity (`antigravity.rs`: `conversations/<id>.db`, `steps.status == 9`, `gen_metadata`, `transcript.jsonl`)
+  - [x] Codex (`codex.rs`: `config.toml`, `state_5.sqlite`, `task_started` / `request_user_input` / `approval_mode`, Rate-Limits)
+  - [x] Claude Code & Custom JSONL (`custom.rs`: `/subagents/`-Filter, `tool_use` ohne `tool_result`, `AskUserQuestion`)
+  - [x] OpenCode (`custom.rs`: `session_v2` + `question`-Tool + Legacy-Fallback)
+  - [x] LM Studio Bionic (`custom.rs`: `ng-sessions.sqlite`, `chat_entries`-Kette, `elicitationRequest`)
+- [x] `CostEstimator` (`cost.rs`) & strikt read-only SQLite-Helper (`sqlite.rs`, `rusqlite` bundled).
+- [x] Plattformübergreifender `notify`-File-Watcher mit Debouncing (`watcher.rs`: FSEvents / inotify / ReadDirectoryChangesW).
+- [x] CLI (`agentorbit-cli`): `scan`, `scan --json`, `watch`, `branch`.
+
+#### Sicherheits- & Privacy-Leitplanken (Öffentliches Repo)
+- Keine lokalen Pfade, Nutzerdaten, API-Keys oder echten Session-DBs im Repository.
+- Unit-Tests erzeugen ausschließlich synthetische Fixtures in temporären Verzeichnissen und räumen diese wieder auf.
+- Lokale Arbeitsnotizen (`CONTEXT.md`, `*.local.md`, `*.local.*`, `.env*`, `packaging/homebrew/local/`) sind per `.gitignore` strikt vom Git-Tracking ausgeschlossen.
 
 ### Phase 2: Tauri v2 Desktop-Shell & OS-Integration
 - [ ] Tauri v2 Projekt aufsetzen (`src-tauri`), `agentorbit-core` einbinden.

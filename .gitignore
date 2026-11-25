@@ -1,11 +1,15 @@
 .build/
 .swiftpm/
 dist/
+target/
 .DS_Store
 *.xcodeproj
 *.xcworkspace
 xcuserdata/
 .env
+.env.*
+*.local.md
+*.local.*
 CONTEXT.md
 /packaging/homebrew/MAINTAINER.local.md
 /packaging/homebrew/local/
