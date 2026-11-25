@@ -3,7 +3,7 @@ name: Release DMG
 on:
   push:
     tags:
-      - 'v*'
+      - 'v1*'
   workflow_dispatch:
     inputs:
       version:

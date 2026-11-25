@@ -2,7 +2,7 @@ class Agentorbit < Formula
   desc "Lightweight, unsigned local AI agent HUD & Glass-HUD Terminal TUI (macOS & Linux)"
   homepage "https://github.com/SimHub/AgentOrbit"
   license "MIT"
-  head "https://github.com/SimHub/AgentOrbit.git", branch: "v2-rust-tauri"
+  head "https://github.com/SimHub/AgentOrbit.git", branch: "main"
 
   depends_on "rust" => :build
 
