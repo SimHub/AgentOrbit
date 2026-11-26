@@ -942,6 +942,13 @@ window.addEventListener("click", () => {
 async function init() {
   if (tauri?.core) {
     try {
+      const ver = await tauri.core.invoke("get_app_version");
+      if (ver) {
+        const tag = document.getElementById("version-tag");
+        if (tag) tag.textContent = `AgentOrbit v${ver}`;
+      }
+    } catch {}
+    try {
       const loaded = await tauri.core.invoke("get_config");
       if (loaded) state.config = { ...state.config, ...loaded };
     } catch {}

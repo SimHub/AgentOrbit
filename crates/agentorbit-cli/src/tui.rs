@@ -671,6 +671,10 @@ fn draw_hud_header(f: &mut Frame, app: &mut TuiState, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
+            format!(" v{}", env!("CARGO_PKG_VERSION")),
+            Style::default().fg(TEXT_DIM),
+        ),
+        Span::styled(
             format!("  {status_sub}  "),
             Style::default().fg(TEXT_MUTED),
         ),

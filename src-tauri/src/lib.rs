@@ -69,6 +69,11 @@ fn collect_enriched() -> (OrbitConfig, Vec<std::path::PathBuf>, Vec<EnrichedSnap
 }
 
 #[tauri::command]
+fn get_app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+#[tauri::command]
 fn get_config() -> OrbitConfig {
     load_config_from(&default_config_path())
 }
@@ -596,6 +601,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_app_version,
             get_config,
             get_discovered_agents,
             save_config,

@@ -13,6 +13,13 @@ fn main() {
     let as_json = args.iter().any(|a| a == "--json");
 
     match subcmd {
+        "--version" | "-V" | "version" => {
+            println!("AgentOrbit v{}", env!("CARGO_PKG_VERSION"));
+        }
+        "--help" | "-h" | "help" => {
+            println!("AgentOrbit v{}", env!("CARGO_PKG_VERSION"));
+            println!("Usage: agentorbit <tui|scan|watch|branch|--version> [--json]");
+        }
         "tui" => {
             if let Err(err) = tui::run_tui() {
                 eprintln!("AgentOrbit TUI error: {err}");
