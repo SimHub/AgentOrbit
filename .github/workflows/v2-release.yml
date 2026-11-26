@@ -64,6 +64,9 @@ jobs:
           mkdir -p dist/pkg
           cp target/release/agentorbit dist/pkg/agentorbit
           cp target/release/agentorbit-app dist/pkg/agentorbit-app
+          cp scripts/install-portable.sh dist/pkg/install-portable.sh
+          chmod +x dist/pkg/install-portable.sh
+          cp src-tauri/icons/icon.png dist/pkg/icon.png
           cp LICENSE README.md dist/pkg/
           tar -czf "dist/${{ matrix.artifact }}.tar.gz" -C dist/pkg .
           if command -v shasum >/dev/null 2>&1; then
@@ -79,6 +82,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist\pkg | Out-Null
           Copy-Item target\release\agentorbit.exe dist\pkg\agentorbit.exe
           Copy-Item target\release\agentorbit-app.exe dist\pkg\agentorbit-app.exe
+          Copy-Item scripts\install-shortcut.ps1 dist\pkg\install-shortcut.ps1
+          Copy-Item src-tauri\icons\icon.ico dist\pkg\icon.ico
           Copy-Item LICENSE, README.md dist\pkg\
           Compress-Archive -Path dist\pkg\* -DestinationPath "dist\${{ matrix.artifact }}.zip" -Force
           $hash = (Get-FileHash "dist\${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()

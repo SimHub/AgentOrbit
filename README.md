@@ -75,7 +75,10 @@ brew install --HEAD ./packaging/homebrew/Formula/agentorbit.rb
 
 ### Option 3 — Portable Binaries (macOS / Linux / Windows)
 
-Download the portable archive for your OS from [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases) (includes `agentorbit` + `agentorbit-app` + `.sha256` checksum).
+Download the portable archive for your OS from [GitHub Releases](https://github.com/SimHub/AgentOrbit/releases) (includes `agentorbit` + `agentorbit-app` + `.sha256` checksum) and optionally register the native OS app search launcher (no admin rights or signing required):
+
+- **macOS (Spotlight / Launchpad) & Linux (GNOME / KDE / Rofi):** run `./install-portable.sh` inside the extracted folder.
+- **Windows (Start Menu / Windows Search):** run `.\install-shortcut.ps1` in PowerShell inside the extracted folder.
 
 ---
 
