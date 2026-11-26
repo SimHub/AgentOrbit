@@ -22,8 +22,8 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 exec "$INSTALL_DIR/agentorbit-app" "\$@"
 EOF
   chmod +x "$APP_DIR/Contents/MacOS/AgentOrbit"
-  if [[ -f "$SCRIPT_DIR/icon.png" ]]; then
-    cp "$SCRIPT_DIR/icon.png" "$APP_DIR/Contents/Resources/icon.png"
+  if [[ -f "$SCRIPT_DIR/icon.icns" ]]; then
+    cp "$SCRIPT_DIR/icon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
   fi
   cat > "$APP_DIR/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -36,11 +36,14 @@ EOF
   <key>CFBundleVersion</key><string>2.0.1</string>
   <key>CFBundleShortVersionString</key><string>2.0.1</string>
   <key>CFBundleExecutable</key><string>AgentOrbit</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSUIElement</key><true/>
 </dict>
 </plist>
 EOF
+  touch "$APP_DIR"
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" >/dev/null 2>&1 || true
   echo "Registered macOS Spotlight launcher: $APP_DIR"
 elif [[ "$(uname -s)" == "Linux" ]]; then
   ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"

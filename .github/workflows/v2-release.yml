@@ -67,6 +67,7 @@ jobs:
           cp scripts/install-portable.sh dist/pkg/install-portable.sh
           chmod +x dist/pkg/install-portable.sh
           cp src-tauri/icons/icon.png dist/pkg/icon.png
+          cp src-tauri/icons/icon.icns dist/pkg/icon.icns
           cp LICENSE README.md dist/pkg/
           tar -czf "dist/${{ matrix.artifact }}.tar.gz" -C dist/pkg .
           if command -v shasum >/dev/null 2>&1; then

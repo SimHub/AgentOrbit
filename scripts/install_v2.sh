@@ -36,10 +36,10 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 exec "$INSTALL_DIR/agentorbit-app" "\$@"
 EOF
   chmod +x "$APP_DIR/Contents/MacOS/AgentOrbit"
-  if [[ -f "dist/AgentOrbit.app/Contents/Resources/AppIcon.icns" ]]; then
+  if [[ -f "src-tauri/icons/icon.icns" ]]; then
+    cp "src-tauri/icons/icon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
+  elif [[ -f "dist/AgentOrbit.app/Contents/Resources/AppIcon.icns" ]]; then
     cp "dist/AgentOrbit.app/Contents/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
-  elif [[ -f "src-tauri/icons/icon.png" ]]; then
-    cp "src-tauri/icons/icon.png" "$APP_DIR/Contents/Resources/icon.png"
   fi
   cat > "$APP_DIR/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -58,6 +58,8 @@ EOF
 </dict>
 </plist>
 EOF
+  touch "$APP_DIR"
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_DIR" >/dev/null 2>&1 || true
   echo "  - $APP_DIR  (macOS Spotlight / Launchpad launcher)"
 elif [[ "$(uname -s)" == "Linux" ]]; then
   ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
